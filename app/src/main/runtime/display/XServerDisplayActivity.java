@@ -334,6 +334,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     private final AtomicBoolean activityDestroyed = new AtomicBoolean(false);
     private final AtomicBoolean sessionCleanupStarted = new AtomicBoolean(false);
     private final AtomicBoolean switchLaunchInProgress = new AtomicBoolean(false);
+    private final AtomicBoolean winHandlerStopped = new AtomicBoolean(false);
 
     private boolean isDarkMode;
     private boolean enableLogsMenu;
@@ -557,6 +558,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
 
         // Initialize the WinHandler after context is set up
         winHandler = new WinHandler(this);
+        winHandlerStopped.set(false);
         winHandler.initializeController();
         controller = winHandler.getCurrentController();
 
@@ -1826,13 +1828,14 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
 
     @Nullable
     private ArrayList<ProcessInfo> captureWinHandlerProcessSnapshot() {
-        if (winHandler == null) return null;
+        WinHandler snapshotWinHandler = winHandler;
+        if (snapshotWinHandler == null) return null;
 
         final CountDownLatch latch = new CountDownLatch(1);
         final Object snapshotLock = new Object();
         final ArrayList<ProcessInfo> currentList = new ArrayList<>();
         final int[] expectedCount = {0};
-        final OnGetProcessInfoListener previousListener = winHandler.getOnGetProcessInfoListener();
+        final OnGetProcessInfoListener previousListener = snapshotWinHandler.getOnGetProcessInfoListener();
 
         OnGetProcessInfoListener listener = (index, count, processInfo) -> {
             if (previousListener != null) {
@@ -1860,9 +1863,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             }
         };
 
-        winHandler.setOnGetProcessInfoListener(listener);
+        snapshotWinHandler.setOnGetProcessInfoListener(listener);
         try {
-            winHandler.listProcesses();
+            snapshotWinHandler.listProcesses();
             if (!latch.await(STEAM_PROCESS_RESPONSE_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
                 Log.w("XServerDisplayActivity", "Timed out waiting for WinHandler process snapshot");
                 return null;
@@ -1876,7 +1879,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             Log.w("XServerDisplayActivity", "Interrupted while waiting for WinHandler process snapshot", e);
             return null;
         } finally {
-            winHandler.setOnGetProcessInfoListener(previousListener);
+            snapshotWinHandler.setOnGetProcessInfoListener(previousListener);
         }
     }
 
@@ -2053,6 +2056,34 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         }
     }
 
+    private void stopWinHandler(String trigger) {
+        WinHandler handler = winHandler;
+        if (handler == null) return;
+        if (!winHandlerStopped.compareAndSet(false, true)) {
+            Log.d("XServerDisplayActivity", "WinHandler already stopped; ignoring duplicate request from " + trigger);
+            return;
+        }
+
+        try {
+            handler.stop();
+        } catch (Exception e) {
+            Log.e("XServerDisplayActivity", "Failed to stop WinHandler from " + trigger, e);
+        }
+    }
+
+    private void cleanupDebugDialog(String trigger) {
+        DebugDialog dialog = debugDialog;
+        if (dialog == null) return;
+        try {
+            ProcessHelper.removeDebugCallback(dialog);
+            dialog.dispose();
+        } catch (Exception e) {
+            Log.w("XServerLeakCheck", "Failed to release debug dialog during " + trigger, e);
+        } finally {
+            debugDialog = null;
+        }
+    }
+
     private void stopXServer(String trigger) {
         try {
             if (xServer != null) {
@@ -2103,10 +2134,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         }
 
         try {
-            if (winHandler != null) {
-                winHandler.stop();
-                winHandler = null;
-            }
+            stopWinHandler("forced cleanup (" + trigger + ")");
         } catch (Exception e) {
             Log.e("XServerLeakCheck", "Failed to stop WinHandler during forced cleanup", e);
         }
@@ -2145,6 +2173,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         }
         Log.d("XServerLeakCheck", "Forced cleanup final process snapshot: "
                 + ProcessHelper.listRunningWineProcessDetails());
+        cleanupDebugDialog("forced cleanup (" + trigger + ")");
     }
 
     private void exit() {
@@ -2175,7 +2204,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     savePlaytimeData(true);
                     cleanupActivityCallbacks("exit");
                     if (midiHandler != null) midiHandler.stop();
-                    if (winHandler != null) winHandler.stop();
+                    stopWinHandler("exit");
                     if (wineRequestHandler != null) wineRequestHandler.stop();
                     /* Gracefully terminate all running wine processes first, so ALSA/audio
                      * threads are no longer fed data before we tear down their sockets. */
@@ -2194,12 +2223,12 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     Log.d("XServerDisplayActivity", "Process snapshot after environment stop: "
                             + ProcessHelper.listRunningWineProcessDetails());
                     stopXServer("exit");
-                    winHandler = null;
                     wineRequestHandler = null;
                     midiHandler = null;
                     xServer = null;
                     xServerView = null;
                     if (preloaderDialog != null && preloaderDialog.isShowing()) preloaderDialog.closeOnUiThread();
+                    cleanupDebugDialog("exit");
                     closeAfterSessionExit();
                 }
             }, 1000);
@@ -2728,6 +2757,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         if (midiHandler != null && midiHandler.getSocket() != null && !midiHandler.getSocket().isClosed()) {
             Log.e(tag, "MidiHandler socket still open");
         }
+        cleanupDebugDialog("onDestroy");
     }
 
     private boolean isCustomShortcut() {
@@ -3675,8 +3705,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         else
             startupSelection = String.valueOf(container.getStartupSelection());
 
+        WineUtils.changeServicesStatus(container, startupSelection);
         if (!startupSelection.equals(container.getExtra("startupSelection"))) {
-            WineUtils.changeServicesStatus(container, startupSelection);
             container.putExtra("startupSelection", startupSelection);
             containerDataChanged = true;
         }
@@ -3720,9 +3750,6 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
 
         // Additional container checks and environment configuration
         if (container != null) {
-                if (Byte.parseByte(startupSelection) == Container.STARTUP_SELECTION_AGGRESSIVE) {
-                    winHandler.killProcess("services.exe");
-                }
                 guestProgramLauncherComponent.setContainer(this.container);
                 guestProgramLauncherComponent.setWineInfo(this.wineInfo);
 
