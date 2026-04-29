@@ -42,6 +42,8 @@ public class GLRenderer
   public final ViewTransformation viewTransformation = new ViewTransformation();
   private final Drawable rootCursorDrawable;
   private final ArrayList<RenderableWindow> renderableWindows = new ArrayList<>();
+  private final FullscreenTransformation tmpFullscreenTransformation = new FullscreenTransformation(null);
+  private String forceFullscreenWMClass = null;
   private boolean fullscreen = false;
   public boolean viewportNeedsUpdate = true;
   private boolean cursorVisible = true;
@@ -57,7 +59,6 @@ public class GLRenderer
   private final Object fpsLimiterLock = new Object();
   private volatile int currentFpsLimit = 0;
   private long nextFrameTimeNanos = 0;
-  private boolean wasDirectMode = false;
 
   private final EffectComposer effectComposer;
 
@@ -252,6 +253,16 @@ public class GLRenderer
   }
 
   private void renderDrawable(Drawable drawable, int x, int y, ShaderMaterial material) {
+    renderDrawable(drawable, x, y, material, false);
+  }
+
+  /**
+   * Render drawable ke GPU.
+   * Jika {@code forceFullscreen} true, posisi dan ukuran dihitung via
+   * {@link FullscreenTransformation#update} (aspect-ratio-preserving, terpusat di layar).
+   * Jika false, render normal di koordinat (x, y) dengan ukuran asli drawable.
+   */
+  private void renderDrawable(Drawable drawable, int x, int y, ShaderMaterial material, boolean forceFullscreen) {
     if (drawable == null) return;
     synchronized (drawable.renderLock) {
       Drawable textureDrawable =
@@ -265,7 +276,19 @@ public class GLRenderer
       GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
       GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
 
-      XForm.set(tmpXForm1, x, y, drawable.width, drawable.height);
+      if (forceFullscreen) {
+        // Gunakan field reusable — tidak alokasi objek baru per frame.
+        tmpFullscreenTransformation.update(xServer.screenInfo,
+            (short) drawable.width, (short) drawable.height);
+        XForm.set(tmpXForm1,
+            tmpFullscreenTransformation.x,
+            tmpFullscreenTransformation.y,
+            tmpFullscreenTransformation.width,
+            tmpFullscreenTransformation.height);
+      } else {
+        XForm.set(tmpXForm1, x, y, drawable.width, drawable.height);
+      }
+
       XForm.multiply(tmpXForm1, tmpXForm1, tmpXForm2);
 
       GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
@@ -286,24 +309,42 @@ public class GLRenderer
     quadVertices.bind(windowMaterial.programId);
 
     try (XLock lock = xServer.lock(XServer.Lockable.DRAWABLE_MANAGER)) {
-      int startIndex = 0;
-      int screenWidth = xServer.screenInfo.width;
-      int screenHeight = xServer.screenInfo.height;
-
-      // Skip occluded windows behind a fullscreen one
-      for (int i = renderableWindows.size() - 1; i >= 0; i--) {
-        RenderableWindow rWin = renderableWindows.get(i);
-        if (rWin.content != null
-            && rWin.content.width >= screenWidth
-            && rWin.content.height >= screenHeight) {
-          startIndex = i;
-          break;
-        }
+      if (renderableWindows.isEmpty()) {
+        quadVertices.disable();
+        return;
       }
 
-      for (int i = startIndex; i < renderableWindows.size(); i++) {
-        RenderableWindow window = renderableWindows.get(i);
-        renderDrawable(window.content, window.rootX, window.rootY, windowMaterial);
+      boolean blendEnabled = true; // blend aktif secara default dari onSurfaceCreated
+
+      // Pass 1: render window besar (forceFullscreen) terlebih dahulu
+      // sehingga window kecil/overlay muncul di atasnya saat NativeRendering aktif.
+      for (RenderableWindow window : renderableWindows) {
+        if (!window.forceFullscreen) continue;
+
+        if (blendEnabled) {
+          GLES20.glDisable(GLES20.GL_BLEND);
+          blendEnabled = false;
+        }
+        renderDrawable(window.content, window.rootX, window.rootY, windowMaterial, true);
+      }
+
+      // Pass 2: render window kecil / overlay di atas window besar (blend aktif).
+      for (RenderableWindow window : renderableWindows) {
+        if (window.forceFullscreen) continue;
+
+        if (!blendEnabled) {
+          GLES20.glEnable(GLES20.GL_BLEND);
+          GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
+          blendEnabled = true;
+        }
+        renderDrawable(window.content, window.rootX, window.rootY, windowMaterial, false);
+      }
+
+      // Pastikan blend selalu aktif kembali setelah renderWindows selesai
+      // agar renderCursor dan pass berikutnya tidak terpengaruh.
+      if (!blendEnabled) {
+        GLES20.glEnable(GLES20.GL_BLEND);
+        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
       }
     }
 
@@ -376,7 +417,44 @@ public class GLRenderer
         }
       }
 
-      if (viewable) renderableWindows.add(new RenderableWindow(window.getContent(), x, y));
+      if (viewable) {
+        boolean forceFullscreen = false;
+
+        if (forceFullscreenWMClass != null) {
+          short width = window.getWidth();
+          short height = window.getHeight();
+          float screenW = xServer.screenInfo.width;
+          float screenH = xServer.screenInfo.height;
+
+          // Deteksi window besar: ≥75% lebar DAN tinggi layar.
+          boolean isLargeWindow = (width >= screenW * 0.75f) && (height >= screenH * 0.75f);
+
+          if (isLargeWindow) {
+            Window parent = window.getParent();
+            boolean hasWMClass = window.getClassName().contains(forceFullscreenWMClass);
+            boolean parentHasWMClass = parent != null && parent.getClassName().contains(forceFullscreenWMClass);
+
+            if (hasWMClass) {
+              // WMClass cocok — fullscreen jika parent tidak cocok dan ini leaf window.
+              forceFullscreen = !parentHasWMClass && window.getChildCount() == 0;
+            } else {
+              // Fallback: deteksi frame dekorasi tipis (borderX ≤ 12px).
+              if (parent != null && parent.getChildCount() == 1) {
+                short borderX = (short) (parent.getWidth() - width);
+                short borderY = (short) (parent.getHeight() - height);
+                if (borderX > 0 && borderY > 0 && borderX <= 12) {
+                  forceFullscreen = true;
+                  removeRenderableWindow(parent);
+                }
+              }
+            }
+          }
+          // Window kecil (overlay/dialog): forceFullscreen tetap false →
+          // akan dirender di Pass 2 di atas window besar (z-order benar).
+        }
+
+        renderableWindows.add(new RenderableWindow(window.getContent(), x, y, forceFullscreen));
+      }
     }
 
     for (Window child : window.getChildren()) {
@@ -524,125 +602,32 @@ public class GLRenderer
   private void drawFrameOptimized() {
     resetFrameState();
 
-    RenderableWindow directCandidate = null;
-    int screenW = xServer.screenInfo.width;
-    int screenH = xServer.screenInfo.height;
-
-    try (XLock lock = xServer.lock(XServer.Lockable.DRAWABLE_MANAGER)) {
-      for (int i = renderableWindows.size() - 1; i >= 0; i--) {
-        RenderableWindow rWin = renderableWindows.get(i);
-        if (rWin.content != null
-            && isDirectScanoutContent(rWin.content)
-            && rWin.content.width >= screenW * 0.95f
-            && rWin.content.height >= screenH * 0.95f) {
-          directCandidate = rWin;
-          break;
-        }
-      }
-    }
-
-    boolean isDirect = directCandidate != null;
-    if (isDirect != wasDirectMode) {
-      viewportNeedsUpdate = true;
-      wasDirectMode = isDirect;
-    }
-
-    if (isDirect) {
-      if (viewportNeedsUpdate) {
-        if (fullscreen) {
-          GLES20.glViewport(0, 0, surfaceWidth, surfaceHeight);
-        } else {
-          GLES20.glViewport(
-              viewTransformation.viewOffsetX,
-              viewTransformation.viewOffsetY,
-              viewTransformation.viewWidth,
-              viewTransformation.viewHeight);
-        }
-        viewportNeedsUpdate = false;
-      }
-
-      GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
-      GLES20.glDisable(GLES20.GL_BLEND);
-
-      if (magnifierEnabled) {
-        float pointerX = 0;
-        float pointerY = 0;
-        float currentZoom = !screenOffsetYRelativeToCursor ? magnifierZoom : 1.0f;
-        if (currentZoom != 1.0f) {
-          pointerX =
-              Mathf.clamp(
-                  xServer.pointer.getX() * currentZoom - xServer.screenInfo.width * 0.5f,
-                  0,
-                  xServer.screenInfo.width * Math.abs(1.0f - currentZoom));
-        }
-        if (screenOffsetYRelativeToCursor || currentZoom != 1.0f) {
-          float scaleY = currentZoom != 1.0f ? Math.abs(1.0f - currentZoom) : 0.5f;
-          float offsetY =
-              xServer.screenInfo.height * (screenOffsetYRelativeToCursor ? 0.25f : 0.5f);
-          pointerY =
-              Mathf.clamp(
-                  xServer.pointer.getY() * currentZoom - offsetY,
-                  0,
-                  xServer.screenInfo.height * scaleY);
-        }
-        XForm.makeTransform(tmpXForm2, -pointerX, -pointerY, currentZoom, currentZoom, 0);
-      } else if (!fullscreen) {
-        int pointerY = 0;
-        if (screenOffsetYRelativeToCursor) {
-          short halfScreenHeight = (short) (xServer.screenInfo.height / 2);
-          pointerY =
-              Mathf.clamp(xServer.pointer.getY() - halfScreenHeight / 2, 0, halfScreenHeight);
-        }
-        XForm.makeTransform(
-            tmpXForm2,
-            viewTransformation.sceneOffsetX,
-            viewTransformation.sceneOffsetY - pointerY,
-            viewTransformation.sceneScaleX,
-            viewTransformation.sceneScaleY,
-            0);
-        GLES20.glEnable(GLES20.GL_SCISSOR_TEST);
-        GLES20.glScissor(
-            viewTransformation.viewOffsetX,
-            viewTransformation.viewOffsetY,
-            viewTransformation.viewWidth,
-            viewTransformation.viewHeight);
-      } else {
-        XForm.identity(tmpXForm2);
-      }
-
-      windowMaterial.use();
-      GLES20.glUniform2f(
-          windowMaterial.getUniformLocation("viewSize"),
-          xServer.screenInfo.width,
-          xServer.screenInfo.height);
-      quadVertices.bind(windowMaterial.programId);
-      renderDrawable(
-          directCandidate.content, directCandidate.rootX, directCandidate.rootY, windowMaterial);
-
-      if (cursorVisible) {
-        GLES20.glEnable(GLES20.GL_BLEND);
-        GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
-        renderCursor();
-      }
-      if (!magnifierEnabled && !fullscreen) {
-        GLES20.glDisable(GLES20.GL_SCISSOR_TEST);
-      }
-      GLES20.glEnable(GLES20.GL_BLEND);
-      GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
-      quadVertices.disable();
-    } else {
-      // No fullscreen candidate — fall back to normal rendering
-      drawFrame();
-    }
-  }
-
-  private boolean isDirectScanoutContent(Drawable drawable) {
-    Drawable scanoutSource = drawable.getScanoutSource();
-    return scanoutSource != null && scanoutSource.isDirectScanout();
+    // CPU Saver mode: logika rendering identik dengan drawFrame().
+    // forceFullscreen per-window (dari collectRenderableWindows) menangani window besar.
+    // Window kecil (overlay/dialog) otomatis muncul di depan window besar
+    // karena renderWindows() melakukan dua pass: besar dulu, kecil di atas.
+    drawFrame();
   }
 
   public void setUnviewableWMClasses(String... unviewableWMNames) {
     this.unviewableWMClasses = unviewableWMNames;
+  }
+
+  public String getForceFullscreenWMClass() {
+    return forceFullscreenWMClass;
+  }
+
+  /**
+   * Set WMClass target untuk ForceFullscreen.
+   * Window besar yang WMClass-nya cocok akan di-scale ke fullscreen
+   * (aspect-ratio-preserving). Window kecil/overlay tetap dirender
+   * di posisi aslinya DAN muncul di depan window besar.
+   * Set null untuk menonaktifkan ForceFullscreen.
+   */
+  public void setForceFullscreenWMClass(String forceFullscreenWMClass) {
+    this.forceFullscreenWMClass = forceFullscreenWMClass;
+    xServerView.queueEvent(this::updateScene);
+    xServerView.requestRender();
   }
 
   @Override
