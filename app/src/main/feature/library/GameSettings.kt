@@ -285,6 +285,7 @@ class GameSettingsStateHolder {
     val selectedNumControllers = mutableIntStateOf(0)
     val disableXInput = mutableStateOf(false)
     val simTouchScreen = mutableStateOf(false)
+    val forceFullscreen = mutableStateOf(false)
     val sdl2Compatibility = mutableStateOf(false)
     val enableXInput = mutableStateOf(false)
     val enableDInput = mutableStateOf(false)
@@ -3048,6 +3049,14 @@ private fun InputSection(state: GameSettingsStateHolder) {
                 label = stringResource(R.string.session_xserver_simulate_touch_screen),
                 checked = state.simTouchScreen.value,
                 onCheckedChange = { state.simTouchScreen.value = it }
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            SettingCheckbox(
+                label = stringResource(R.string.session_xserver_force_fullscreen),
+                checked = state.forceFullscreen.value,
+                onCheckedChange = { state.forceFullscreen.value = it }
             )
         }
     }
