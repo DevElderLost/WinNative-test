@@ -1015,9 +1015,7 @@ return boundingBox;
           }
 
           inputControlsView.handleStickInput(firstBinding, finalX, finalY);
-          for (byte i = 0; i < 4; i++) {
-            this.states[i] = true;
-          }
+          // Tidak set states[] untuk gamepad analog — reset dilakukan via handleStickInput(0,0) di handleTouchUp
         } else {
           final boolean[] states = {
             deltaY <= -STICK_DEAD_ZONE,
@@ -1141,27 +1139,40 @@ return boundingBox;
         || type == Type.D_PAD
         || type == Type.STICK
         || type == Type.TRACKPAD) {
-      for (byte i = 0; i < states.length; i++) {
-        if (states[i]) inputControlsView.handleInputEvent(getBindingAt(i), false);
-        states[i] = false;
+      if (type == Type.STICK) {
+        Binding firstBinding = getBindingAt(0);
+        if (firstBinding.isGamepad()) {
+          // Gamepad analog: reset via handleStickInput saja, jangan lewat states[]
+          inputControlsView.handleStickInput(firstBinding, 0.0f, 0.0f);
+          Arrays.fill(states, false);
+        } else {
+          for (byte i = 0; i < states.length; i++) {
+            if (states[i]) inputControlsView.handleInputEvent(getBindingAt(i), false);
+            states[i] = false;
+          }
+        }
+        currentPosition = null;
+      } else if (type == Type.TRACKPAD) {
+        Binding firstBinding = getBindingAt(0);
+        if (firstBinding.isGamepad()) {
+          inputControlsView.handleStickInput(firstBinding, 0.0f, 0.0f);
+          Arrays.fill(states, false);
+        } else {
+          for (byte i = 0; i < states.length; i++) {
+            if (states[i]) inputControlsView.handleInputEvent(getBindingAt(i), false);
+            states[i] = false;
+          }
+        }
+        currentPosition = null;
+      } else {
+        for (byte i = 0; i < states.length; i++) {
+          if (states[i]) inputControlsView.handleInputEvent(getBindingAt(i), false);
+          states[i] = false;
+        }
       }
 
       if (type == Type.RANGE_BUTTON) {
         scroller.handleTouchUp();
-      }
-      if (type == Type.STICK) {
-        Binding firstBinding = getBindingAt(0);
-        if (firstBinding.isGamepad()) {
-          inputControlsView.handleStickInput(firstBinding, 0.0f, 0.0f);
-        }
-        currentPosition = null;
-      }
-      if (type == Type.TRACKPAD) {
-        Binding firstBinding = getBindingAt(0);
-        if (firstBinding.isGamepad()) {
-          inputControlsView.handleStickInput(firstBinding, 0.0f, 0.0f);
-        }
-        currentPosition = null;
       }
 
       inputControlsView.invalidate();
