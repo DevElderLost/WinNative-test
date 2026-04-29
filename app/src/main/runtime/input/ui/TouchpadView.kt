@@ -112,22 +112,36 @@ class TouchpadView(
         resolutionScale = 1000.0f / Math.min(xServer.screenInfo.width.toInt(), xServer.screenInfo.height.toInt())
     }
 
-    private fun updateXform(
-        outerWidth: Int,
-        outerHeight: Int,
-        innerWidth: Int,
-        innerHeight: Int,
-    ) {
-        val viewTransformation = ViewTransformation()
-        viewTransformation.update(outerWidth, outerHeight, innerWidth, innerHeight)
-        val invAspect = 1.0f / viewTransformation.aspect
-        if (!xServer.renderer.isFullscreen) {
-            XForm.makeTranslation(xform, -viewTransformation.viewOffsetX.toFloat(), -viewTransformation.viewOffsetY.toFloat())
-            XForm.scale(xform, invAspect, invAspect)
-        } else {
-            XForm.makeScale(xform, innerWidth.toFloat() / outerWidth, innerHeight.toFloat() / outerHeight)
-        }
+private fun updateXform(
+    outerWidth: Int,
+    outerHeight: Int,
+    innerWidth: Int,
+    innerHeight: Int,
+) {
+    val viewTransformation = ViewTransformation()
+    viewTransformation.update(outerWidth, outerHeight, innerWidth, innerHeight)
+
+    if (!xServer.renderer.isFullscreen) {
+        // Translasi: hilangkan letterbox offset
+        XForm.makeTranslation(
+            xform,
+            -viewTransformation.viewOffsetX.toFloat(),
+            -viewTransformation.viewOffsetY.toFloat()
+        )
+        // Scale: gunakan sceneScaleX dan sceneScaleY yang benar (bukan invAspect seragam)
+        // sceneScaleX = viewWidth / innerWidth,  sceneScaleY = viewHeight / innerHeight
+        // Invers-nya: innerWidth / viewWidth, innerHeight / viewHeight
+        val scaleX = innerWidth.toFloat() / viewTransformation.viewWidth
+        val scaleY = innerHeight.toFloat() / viewTransformation.viewHeight
+        XForm.scale(xform, scaleX, scaleY)
+    } else {
+        XForm.makeScale(
+            xform,
+            innerWidth.toFloat() / outerWidth,
+            innerHeight.toFloat() / outerHeight
+        )
     }
+}
 
     inner class Finger(
         x: Float,
@@ -317,29 +331,36 @@ class TouchpadView(
                 }
             }
 
-            MotionEvent.ACTION_MOVE -> {
-                if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
-                    val transformedPoint = XForm.transformPoint(xform, event.x, event.y)
-                    if (xServer.isRelativeMouseMovement) {
-                        xServer.winHandler.mouseEvent(MouseEventFlags.MOVE, transformedPoint[0].toInt(), transformedPoint[1].toInt(), 0)
-                    } else {
-                        xServer.injectPointerMove(transformedPoint[0].toInt(), transformedPoint[1].toInt())
-                    }
-                } else {
-                    for (i in 0 until MAX_FINGERS.toInt()) {
-                        val finger = fingers[i] ?: continue
-                        val pointerIndex = event.findPointerIndex(i)
-                        if (pointerIndex >= 0) {
-                            finger.update(event.getX(pointerIndex), event.getY(pointerIndex))
-                            handleFingerMove(finger)
-                        } else {
-                            handleFingerUp(finger)
-                            fingers[i] = null
-                            numFingers--
-                        }
-                    }
-                }
+MotionEvent.ACTION_MOVE -> {
+    if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
+        var dx = event.getAxisValue(MotionEvent.AXIS_RELATIVE_X)
+        var dy = event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y)
+        if (dx == 0f && dy == 0f) {
+            dx = event.x
+            dy = event.y
+        }
+        val scaledDx = (dx * sensitivity).toInt()
+        val scaledDy = (dy * sensitivity).toInt()
+        if (xServer.isRelativeMouseMovement) {
+            xServer.winHandler.mouseEvent(MouseEventFlags.MOVE, scaledDx, scaledDy, 0)
+        } else {
+            xServer.injectPointerMoveDelta(scaledDx, scaledDy)
+        }
+    } else {
+        for (i in 0 until MAX_FINGERS.toInt()) {
+            val finger = fingers[i] ?: continue
+            val pointerIndex = event.findPointerIndex(i)
+            if (pointerIndex >= 0) {
+                finger.update(event.getX(pointerIndex), event.getY(pointerIndex))
+                handleFingerMove(finger)
+            } else {
+                handleFingerUp(finger)
+                fingers[i] = null
+                numFingers--
             }
+        }
+    }
+}
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 longPressHandler.removeCallbacks(longPressRunnable)
@@ -670,13 +691,22 @@ class TouchpadView(
             }
 
             MotionEvent.ACTION_MOVE, MotionEvent.ACTION_HOVER_MOVE -> {
-                val transformedPoint = XForm.transformPoint(xform, event.x, event.y)
-                if (xServer.isRelativeMouseMovement) {
-                    xServer.winHandler.mouseEvent(MouseEventFlags.MOVE, transformedPoint[0].toInt(), transformedPoint[1].toInt(), 0)
-                } else {
-                    xServer.injectPointerMove(transformedPoint[0].toInt(), transformedPoint[1].toInt())
-                }
-                true
+            // Mouse fisik: gunakan AXIS_RELATIVE (delta), bukan posisi absolut
+               var dx = event.getAxisValue(MotionEvent.AXIS_RELATIVE_X)
+               var dy = event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y)
+               // Fallback jika device tidak support AXIS_RELATIVE
+               if (dx == 0f && dy == 0f) {
+                   dx = event.x
+                   dy = event.y
+               }
+               val scaledDx = (dx * sensitivity).toInt()
+               val scaledDy = (dy * sensitivity).toInt()
+               if (xServer.isRelativeMouseMovement) {
+                   xServer.winHandler.mouseEvent(MouseEventFlags.MOVE, scaledDx, scaledDy, 0)
+               } else {
+                   xServer.injectPointerMoveDelta(scaledDx, scaledDy)  // ← Delta, bukan Move absolut
+               }
+               true
             }
 
             MotionEvent.ACTION_SCROLL -> {
