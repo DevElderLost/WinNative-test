@@ -1336,7 +1336,8 @@ class ShortcutSettingsComposeDialog private constructor(
                     shortcut.container.id,
                     shortcutPath,
                     shortcut.name,
-                    shortcutUuid
+                    shortcutUuid,
+                    shortcut.getExtra("forceFullscreen", "0")
                 )
             )
             .build()
