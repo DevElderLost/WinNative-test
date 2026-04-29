@@ -3944,6 +3944,11 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
 
         if (shortcut != null) {
             renderer.setUnviewableWMClasses("explorer.exe");
+            String forceFullscreenExtra = shortcut.getExtra("forceFullscreen", "0");
+            // Jika forceFullscreen aktif, kirim wmClass shortcut (bisa kosong → match semua window besar).
+            // Jika nonaktif, kirim null → GLRenderer melewati semua logika forceFullscreen.
+            renderer.setForceFullscreenWMClass(
+                forceFullscreenExtra.equals("1") ? shortcut.getExtra("wmClass", "") : null);
             String savedFpsLimit = shortcut.getExtra("fpsLimit", "0");
             try {
                 runtimeFpsLimit = Integer.parseInt(savedFpsLimit);
