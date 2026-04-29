@@ -226,6 +226,7 @@ public class ShortcutsFragment extends Fragment {
     intent.putExtra("shortcut_path", shortcut.file.getPath());
     intent.putExtra("shortcut_name", shortcut.name);
     intent.putExtra("disableXinput", shortcut.getExtra("disableXinput", "0"));
+    intent.putExtra("forceFullscreen", shortcut.getExtra("forceFullscreen", "0"));
     activity.startActivity(intent);
   }
 
@@ -346,7 +347,8 @@ public class ShortcutsFragment extends Fragment {
   }
 
   public static Intent buildShortcutLaunchIntent(
-      Context context, int containerId, String shortcutPath, String shortcutName, String uuid) {
+      Context context, int containerId, String shortcutPath, String shortcutName, String uuid,
+      String forceFullscreen) {
     Intent intent = new Intent(context, XServerDisplayActivity.class);
     intent.setAction(Intent.ACTION_VIEW);
     if (shortcutPath != null && !shortcutPath.isEmpty()) {
@@ -368,6 +370,7 @@ public class ShortcutsFragment extends Fragment {
     intent.putExtra("shortcut_path", shortcutPath);
     intent.putExtra("shortcut_name", shortcutName);
     intent.putExtra("shortcut_uuid", uuid);
+    intent.putExtra("forceFullscreen", forceFullscreen);
     intent.putExtra(XServerDisplayActivity.EXTRA_LAUNCHED_FROM_PINNED_SHORTCUT, true);
     return intent;
   }
@@ -453,7 +456,8 @@ public class ShortcutsFragment extends Fragment {
             shortcut.name,
             shortcut.name,
             buildShortcutLaunchIntent(
-                requireContext(), shortcut.container.id, shortcutPath, shortcut.name, shortcutUuid),
+                requireContext(), shortcut.container.id, shortcutPath, shortcut.name, shortcutUuid,
+                shortcut.getExtra("forceFullscreen", "0")),
             shortcutIcon),
         shortcutIds,
         null);
@@ -509,7 +513,8 @@ public class ShortcutsFragment extends Fragment {
       int containerId,
       String shortcutPath,
       Icon icon,
-      String uuid) {
+      String uuid,
+      String forceFullscreen) {
     ShortcutManager shortcutManager = getSystemService(requireContext(), ShortcutManager.class);
     if (shortcutManager == null) return;
 
@@ -526,7 +531,8 @@ public class ShortcutsFragment extends Fragment {
                       shortLabel,
                       longLabel,
                       buildShortcutLaunchIntent(
-                          requireContext(), containerId, shortcutPath, shortLabel, uuid),
+                          requireContext(), containerId, shortcutPath, shortLabel, uuid,
+                          forceFullscreen),
                       icon)));
           break;
         }

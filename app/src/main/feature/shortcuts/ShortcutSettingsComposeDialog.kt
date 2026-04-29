@@ -350,6 +350,7 @@ class ShortcutSettingsComposeDialog private constructor(
             if ((inputType and WinHandler.FLAG_DINPUT_MAPPER_STANDARD.toInt()) == WinHandler.FLAG_DINPUT_MAPPER_STANDARD.toInt()) 0 else 1
         state.disableXInput.value = shortcut.getExtra("disableXinput", "0") == "1"
         state.simTouchScreen.value = shortcut.getExtra("simTouchScreen", "0") == "1"
+        state.forceFullscreen.value = shortcut.getExtra("forceFullscreen", "0") == "1"
 
         // Steam options
         val gameSource = shortcut.getExtra("game_source", "")
@@ -1141,6 +1142,12 @@ class ShortcutSettingsComposeDialog private constructor(
             shortcut.putExtra(
                 "simTouchScreen",
                 if (state.simTouchScreen.value) "1" else "0"
+            )
+
+            // Force Fullscreen
+            shortcut.putExtra(
+                "forceFullscreen",
+                if (state.forceFullscreen.value) "1" else "0"
             )
 
             // Launch EXE path
