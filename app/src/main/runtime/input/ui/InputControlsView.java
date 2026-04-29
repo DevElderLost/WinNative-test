@@ -20,6 +20,7 @@ import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
 import android.util.SparseArray;
+import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.PointerIcon;
@@ -608,34 +609,102 @@ public class InputControlsView extends View {
   @Override
   public boolean onGenericMotionEvent(MotionEvent event) {
     if (!editMode && profile != null) {
-      ExternalController controller = profile.getController(event.getDeviceId());
-
-      if (controller != null) {
-        controller.updateStateFromMotionEvent(event);
-        ExternalControllerBinding controllerBinding;
-
-        controllerBinding = controller.getControllerBinding(KeyEvent.KEYCODE_BUTTON_L2);
-        if (controllerBinding != null) {
-          handleInputEvent(
-              controller,
-              controllerBinding.getBinding(),
-              controller.state.isPressed(ExternalController.IDX_BUTTON_L2));
+        ExternalController controller = profile.getController(event.getDeviceId());
+        
+        // Fallback: cari controller langsung dari device (untuk mouse yang belum di-assign)
+        if (controller == null) {
+            InputDevice device = InputDevice.getDevice(event.getDeviceId());
+            if (ExternalController.isMouseDevice(device)) {
+                controller = ExternalController.getController(event.getDeviceId());
+            }
         }
 
-        controllerBinding = controller.getControllerBinding(KeyEvent.KEYCODE_BUTTON_R2);
-        if (controllerBinding != null) {
-          handleInputEvent(
-              controller,
-              controllerBinding.getBinding(),
-              controller.state.isPressed(ExternalController.IDX_BUTTON_R2));
-        }
+        if (controller != null) {
+            // Existing: joystick/gamepad
+            if (ExternalController.isJoystickDevice(event)) {
+                controller.updateStateFromMotionEvent(event);
 
-        processJoystickInput(controller);
-        return true;
-      }
+                ExternalControllerBinding controllerBinding;
+                controllerBinding = controller.getControllerBinding(KeyEvent.KEYCODE_BUTTON_L2);
+                if (controllerBinding != null) {
+                    handleInputEvent(controller, controllerBinding.getBinding(),
+                        controller.state.isPressed(ExternalController.IDX_BUTTON_L2));
+                }
+                controllerBinding = controller.getControllerBinding(KeyEvent.KEYCODE_BUTTON_R2);
+                if (controllerBinding != null) {
+                    handleInputEvent(controller, controllerBinding.getBinding(),
+                        controller.state.isPressed(ExternalController.IDX_BUTTON_R2));
+                }
+                processJoystickInput(controller);
+                return true;
+            }
+
+            // Tambahan: mouse Bluetooth
+            InputDevice device = InputDevice.getDevice(event.getDeviceId());
+            if (ExternalController.isMouseDevice(device)) {
+
+                // Klik tombol mouse
+                if (event.getActionMasked() == MotionEvent.ACTION_BUTTON_PRESS ||
+                    event.getActionMasked() == MotionEvent.ACTION_BUTTON_RELEASE) {
+                    boolean pressed = event.getActionMasked() == MotionEvent.ACTION_BUTTON_PRESS;
+                    int btn = event.getActionButton();
+                    int keyCode = -1;
+                    if ((btn & MotionEvent.BUTTON_PRIMARY) != 0)
+                        keyCode = ExternalControllerBinding.MOUSE_LEFT;
+                    else if ((btn & MotionEvent.BUTTON_SECONDARY) != 0)
+                        keyCode = ExternalControllerBinding.MOUSE_RIGHT;
+                    else if ((btn & MotionEvent.BUTTON_TERTIARY) != 0)
+                        keyCode = ExternalControllerBinding.MOUSE_MIDDLE;
+
+                    if (keyCode != -1) {
+                        ExternalControllerBinding binding = controller.getControllerBinding(keyCode);
+                        if (binding != null) {
+                            handleInputEvent(controller, binding.getBinding(), pressed);
+                            return true;
+                        }
+                    }
+                }
+
+                // Gerakan mouse
+                float dx = event.getAxisValue(MotionEvent.AXIS_RELATIVE_X);
+                float dy = event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y);
+                if (dx == 0f && dy == 0f) {
+                    dx = event.getAxisValue(MotionEvent.AXIS_X);
+                    dy = event.getAxisValue(MotionEvent.AXIS_Y);
+                }
+                if (Math.abs(dx) > 0.5f || Math.abs(dy) > 0.5f) {
+                    if (Math.abs(dx) >= Math.abs(dy) && Math.abs(dx) > 0.5f) {
+                        int keyCode = ExternalControllerBinding.getKeyCodeForAxis(
+                            MotionEvent.AXIS_RELATIVE_X, (byte)(dx > 0 ? 1 : -1));
+                        ExternalControllerBinding binding = controller.getControllerBinding(keyCode);
+                        if (binding != null)
+                            handleInputEvent(controller, binding.getBinding(), true, Math.abs(dx), false);
+                    } else if (Math.abs(dy) > 0.5f) {
+                        int keyCode = ExternalControllerBinding.getKeyCodeForAxis(
+                            MotionEvent.AXIS_RELATIVE_Y, (byte)(dy > 0 ? 1 : -1));
+                        ExternalControllerBinding binding = controller.getControllerBinding(keyCode);
+                        if (binding != null)
+                            handleInputEvent(controller, binding.getBinding(), true, Math.abs(dy), false);
+                    }
+                    return true;
+                }
+
+                // Scroll
+                float scroll = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
+                if (Math.abs(scroll) > 0.1f) {
+                    int keyCode = ExternalControllerBinding.getKeyCodeForAxis(
+                        MotionEvent.AXIS_VSCROLL, (byte)(scroll > 0 ? 1 : -1));
+                    ExternalControllerBinding binding = controller.getControllerBinding(keyCode);
+                    if (binding != null) {
+                        handleInputEvent(controller, binding.getBinding(), true);
+                        return true;
+                    }
+                }
+            }
+        }
     }
     return super.onGenericMotionEvent(event);
-  }
+}
 
   @Override
   public boolean onTouchEvent(MotionEvent event) {
