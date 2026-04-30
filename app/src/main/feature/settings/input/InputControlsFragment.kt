@@ -224,52 +224,89 @@ class InputControlsFragment : Fragment() {
         return true
     }
 
-    fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
-        val controller = activeBindingController ?: return false
-        if (event.deviceId != controller.deviceId) return false
-        if (!controller.updateStateFromMotionEvent(event)) return false
+fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+    val controller = activeBindingController ?: return false
+    if (event.deviceId != controller.deviceId) return false
 
-        val l2Pressed =
-            controller.state.isPressed(ExternalController.IDX_BUTTON_L2.toInt()) || controller.state.triggerL > 0.5f
-        val r2Pressed =
-            controller.state.isPressed(ExternalController.IDX_BUTTON_R2.toInt()) || controller.state.triggerR > 0.5f
-        if (l2Pressed && !activeBindingL2WasPressed) {
-            onControllerButtonPressed(controller, KeyEvent.KEYCODE_BUTTON_L2)
-        }
-        if (r2Pressed && !activeBindingR2WasPressed) {
-            onControllerButtonPressed(controller, KeyEvent.KEYCODE_BUTTON_R2)
-        }
-        activeBindingL2WasPressed = l2Pressed
-        activeBindingR2WasPressed = r2Pressed
+    val device = android.view.InputDevice.getDevice(event.deviceId)
 
-        val axes =
-            intArrayOf(
-                MotionEvent.AXIS_X,
-                MotionEvent.AXIS_Y,
-                MotionEvent.AXIS_Z,
-                MotionEvent.AXIS_RZ,
-                MotionEvent.AXIS_HAT_X,
-                MotionEvent.AXIS_HAT_Y,
-            )
-        val values =
-            floatArrayOf(
-                controller.state.thumbLX,
-                controller.state.thumbLY,
-                controller.state.thumbRX,
-                controller.state.thumbRY,
-                controller.state.getDPadX().toFloat(),
-                controller.state.getDPadY().toFloat(),
-            )
-
-        for (index in axes.indices) {
-            val sign = Mathf.sign(values[index])
-            if (sign.toInt() != 0) {
-                val axisKeyCode = ExternalControllerBinding.getKeyCodeForAxis(axes[index], sign)
-                onControllerButtonPressed(controller, axisKeyCode)
+    // === MOUSE HANDLING ===
+    if (ExternalController.isMouseDevice(device)) {
+        // Klik tombol mouse (ACTION_BUTTON_PRESS)
+        if (event.actionMasked == MotionEvent.ACTION_BUTTON_PRESS) {
+            val btn = event.actionButton
+            val keyCode = when {
+                btn and MotionEvent.BUTTON_PRIMARY != 0   -> ExternalControllerBinding.MOUSE_LEFT.toInt()
+                btn and MotionEvent.BUTTON_SECONDARY != 0 -> ExternalControllerBinding.MOUSE_RIGHT.toInt()
+                btn and MotionEvent.BUTTON_TERTIARY != 0  -> ExternalControllerBinding.MOUSE_MIDDLE.toInt()
+                else -> KeyEvent.KEYCODE_UNKNOWN
+            }
+            if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
+                onControllerButtonPressed(controller, keyCode)
+                return true
             }
         }
-        return true
+
+        // Gerakan mouse
+        var dx = event.getAxisValue(MotionEvent.AXIS_RELATIVE_X)
+        var dy = event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y)
+        if (dx == 0f && dy == 0f) {
+            dx = event.getAxisValue(MotionEvent.AXIS_X)
+            dy = event.getAxisValue(MotionEvent.AXIS_Y)
+        }
+        if (Math.abs(dx) > 0.5f || Math.abs(dy) > 0.5f) {
+            if (Math.abs(dx) >= Math.abs(dy) && Math.abs(dx) > 0.5f) {
+                val keyCode = ExternalControllerBinding.getKeyCodeForAxis(
+                    MotionEvent.AXIS_RELATIVE_X, if (dx > 0) 1 else -1)
+                onControllerButtonPressed(controller, keyCode)
+            } else if (Math.abs(dy) > 0.5f) {
+                val keyCode = ExternalControllerBinding.getKeyCodeForAxis(
+                    MotionEvent.AXIS_RELATIVE_Y, if (dy > 0) 1 else -1)
+                onControllerButtonPressed(controller, keyCode)
+            }
+            return true
+        }
+
+        // Scroll
+        val scroll = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
+        if (Math.abs(scroll) > 0.1f) {
+            val keyCode = ExternalControllerBinding.getKeyCodeForAxis(
+                MotionEvent.AXIS_VSCROLL, if (scroll > 0) 1 else -1)
+            onControllerButtonPressed(controller, keyCode)
+            return true
+        }
+
+        return false
     }
+
+    // === JOYSTICK/GAMEPAD HANDLING (kode lama tetap sama) ===
+    if (!controller.updateStateFromMotionEvent(event)) return false
+
+    val l2Pressed = controller.state.isPressed(ExternalController.IDX_BUTTON_L2.toInt()) || controller.state.triggerL > 0.5f
+    val r2Pressed = controller.state.isPressed(ExternalController.IDX_BUTTON_R2.toInt()) || controller.state.triggerR > 0.5f
+    if (l2Pressed && !activeBindingL2WasPressed) onControllerButtonPressed(controller, KeyEvent.KEYCODE_BUTTON_L2)
+    if (r2Pressed && !activeBindingR2WasPressed) onControllerButtonPressed(controller, KeyEvent.KEYCODE_BUTTON_R2)
+    activeBindingL2WasPressed = l2Pressed
+    activeBindingR2WasPressed = r2Pressed
+
+    val axes = intArrayOf(
+        MotionEvent.AXIS_X, MotionEvent.AXIS_Y,
+        MotionEvent.AXIS_Z, MotionEvent.AXIS_RZ,
+        MotionEvent.AXIS_HAT_X, MotionEvent.AXIS_HAT_Y,
+    )
+    val values = floatArrayOf(
+        controller.state.thumbLX, controller.state.thumbLY,
+        controller.state.thumbRX, controller.state.thumbRY,
+        controller.state.getDPadX().toFloat(), controller.state.getDPadY().toFloat(),
+    )
+    for (index in axes.indices) {
+        val sign = Mathf.sign(values[index])
+        if (sign.toInt() != 0) {
+            onControllerButtonPressed(controller, ExternalControllerBinding.getKeyCodeForAxis(axes[index], sign))
+        }
+    }
+    return true
+}
 
     private fun publishUiState() {
         val profile = currentProfile
@@ -934,9 +971,9 @@ class InputControlsFragment : Fragment() {
         ) { which ->
             binding.binding =
                 when (which) {
-                    0 -> Binding.keyboardBindingValues().firstOrNull() ?: Binding.NONE
-                    1 -> Binding.mouseBindingValues().firstOrNull() ?: Binding.NONE
-                    2 -> Binding.gamepadBindingValues().firstOrNull() ?: Binding.NONE
+                    0 -> Binding.keyboardBindingValues().getOrNull(1) ?: Binding.NONE
+                    1 -> Binding.mouseBindingValues().getOrNull(1) ?: Binding.NONE
+                    2 -> Binding.gamepadBindingValues().getOrNull(1) ?: Binding.NONE
                     else -> Binding.NONE
                 }
             currentProfile?.putController(controller)
