@@ -53,6 +53,7 @@ import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.ZoomIn
+import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.OutlinedTextField
@@ -118,6 +119,7 @@ private val DrawerPrimaryItemIds =
         R.id.main_menu_keyboard,
         R.id.main_menu_input_controls,
         R.id.main_menu_fps_monitor,
+        R.id.main_menu_simulate_touch,
     )
 
 private enum class HUDMetricEditor(
@@ -163,6 +165,7 @@ data class XServerDrawerState(
     val fsrMode: Int = 0,
     val fsrSharpness: Int = 100,
     val colorProfile: Int = 0,
+    val simulateTouchEnabled: Boolean = false,
 )
 
 class XServerDrawerStateHolder(
@@ -224,6 +227,8 @@ interface XServerDrawerActionListener {
     fun onFSRSharpnessChanged(sharpness: Int)
 
     fun onColorProfileSelected(profile: Int)
+    
+    fun onSimulateTouchChanged(enabled: Boolean)
 }
 
 fun buildXServerDrawerState(
@@ -261,6 +266,7 @@ fun buildXServerDrawerState(
     fsrMode: Int = 0,
     fsrSharpness: Int = 100,
     colorProfile: Int = 0,
+    simulateTouchEnabled: Boolean = false,
 ): XServerDrawerState {
     val items =
         mutableListOf(
@@ -291,6 +297,16 @@ fun buildXServerDrawerState(
                 icon = Icons.Outlined.SportsEsports,
                 active = gyroscopeEnabled,
             ),
+XServerDrawerItem(
+    itemId = R.id.main_menu_simulate_touch,
+    title = context.getString(R.string.session_drawer_simulate_touch),
+    subtitle = if (simulateTouchEnabled)
+        context.getString(R.string.common_ui_enabled)
+    else
+        context.getString(R.string.common_ui_disabled),
+    icon = Icons.Outlined.TouchApp,
+    active = simulateTouchEnabled,
+),            
             XServerDrawerItem(
                 itemId = R.id.main_menu_relative_mouse_movement,
                 title = context.getString(R.string.session_drawer_relative_mouse_movement),
@@ -419,6 +435,7 @@ fun buildXServerDrawerState(
         fsrMode = fsrMode,
         fsrSharpness = fsrSharpness,
         colorProfile = colorProfile,
+        simulateTouchEnabled = simulateTouchEnabled,
     )
 }
 
@@ -479,6 +496,12 @@ private fun XServerDrawerContent(
                             state = state,
                             listener = listener,
                             onToggleMonitor = { listener.onActionSelected(item.itemId) },
+                        )
+                    }
+                    R.id.main_menu_simulate_touch -> {          // ← TAMBAH BLOCK INI
+                        XServerDrawerActionCard(
+                        item = item,
+                        onClick = { listener.onSimulateTouchChanged(!state.simulateTouchEnabled) },
                         )
                     }
                     R.id.main_menu_gyroscope -> {

@@ -287,6 +287,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     private Runnable configChangedCallback = null;
     private boolean isPaused = false;
     private boolean isRelativeMouseMovement = false;
+    private boolean isSimulateTouchEnabled = false;
     private boolean isNativeRenderingEnabled = true;
 
     private float hudTransparency = 1.0f;
@@ -1665,15 +1666,20 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 }
                 handled = true;
                 break;
-            case MotionEvent.ACTION_MOVE:
-            case MotionEvent.ACTION_HOVER_MOVE:
-                float[] transformedPoint = XForm.transformPoint(xform, event.getX(), event.getY());
-                if (xServer.isRelativeMouseMovement())
-                    xServer.getWinHandler().mouseEvent(MouseEventFlags.MOVE, (int)transformedPoint[0], (int)transformedPoint[1], 0);
-                else
-                    xServer.injectPointerMoveDelta((int)transformedPoint[0], (int)transformedPoint[1]);
-                handled = true;
-                break;
+case MotionEvent.ACTION_MOVE:
+case MotionEvent.ACTION_HOVER_MOVE:
+    float dx = event.getAxisValue(MotionEvent.AXIS_RELATIVE_X);
+    float dy = event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y);
+    if (dx == 0f && dy == 0f) {
+        dx = event.getX();
+        dy = event.getY();
+    }
+    if (xServer.isRelativeMouseMovement())
+        xServer.getWinHandler().mouseEvent(MouseEventFlags.MOVE, (int)dx, (int)dy, 0);
+    else
+        xServer.injectPointerMoveDelta((int)dx, (int)dy);
+    handled = true;
+    break;
             case MotionEvent.ACTION_SCROLL:
                 float scrollY = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
                 if (scrollY <= -1.0f) {
@@ -2891,7 +2897,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 fsrEnabled,
                 fsrMode,
                 fsrSharpness,
-                colorProfile
+                colorProfile,
+                isSimulateTouchEnabled
         );
 
         if (drawerActionListener == null) {
@@ -3067,6 +3074,15 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                         colorProfile = profile;
                         preferences.edit().putInt("color_profile", profile).apply();
                         applyScreenEffects();
+                        renderDrawerMenu();
+                    }
+                
+                    @Override
+                    public void onSimulateTouchChanged(boolean enabled) {
+                        isSimulateTouchEnabled = enabled;
+                        if (touchpadView != null) {
+                            touchpadView.setSimTouchScreen(enabled);
+                        }
                         renderDrawerMenu();
                     }
                 };
@@ -4598,13 +4614,16 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         boolean handledByWinHandler = false;
         boolean handledByTouchpadView = false;
 
-        if (isPointerMotionEvent(event) && touchpadView != null) {
-            handledByTouchpadView = touchpadView.onExternalMouseEvent(event);
-        }
-
-        if (handledByTouchpadView) {
-            return true;
-        }
+if (isPointerMotionEvent(event)) {
+    if (touchpadView != null) {
+        handledByTouchpadView = touchpadView.onExternalMouseEvent(event);
+    }
+    // Tetap teruskan ke inputControlsView untuk binding check
+    if (inputControlsView != null) {
+        inputControlsView.onGenericMotionEvent(event);
+    }
+    if (handledByTouchpadView) return true;
+}
 
         if (isControllerMotionEvent(event)) {
             cancelMousePointerTimeout();
