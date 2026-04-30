@@ -299,7 +299,7 @@ fun buildXServerDrawerState(
             ),
 XServerDrawerItem(
     itemId = R.id.main_menu_simulate_touch,
-    title = context.getString(R.string.session_drawer_simulate_touch),
+    title = context.getString(R.string.session_xserver_simulate_touch_screen),
     subtitle = if (simulateTouchEnabled)
         context.getString(R.string.common_ui_enabled)
     else
