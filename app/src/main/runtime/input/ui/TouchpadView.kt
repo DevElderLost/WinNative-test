@@ -675,15 +675,24 @@ class TouchpadView(
                 true
             }
 
-            MotionEvent.ACTION_MOVE, MotionEvent.ACTION_HOVER_MOVE -> {
-                val transformedPoint = XForm.transformPoint(xform, event.x, event.y)
-                if (xServer.isRelativeMouseMovement) {
-                    xServer.winHandler.mouseEvent(MouseEventFlags.MOVE, transformedPoint[0].toInt(), transformedPoint[1].toInt(), 0)
-                } else {
-                    xServer.injectPointerMove(transformedPoint[0].toInt(), transformedPoint[1].toInt())
-                }
-                true
-            }
+MotionEvent.ACTION_MOVE, MotionEvent.ACTION_HOVER_MOVE -> {
+    // Mouse fisik: gunakan AXIS_RELATIVE (delta), bukan posisi absolut
+    var dx = event.getAxisValue(MotionEvent.AXIS_RELATIVE_X)
+    var dy = event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y)
+    // Fallback jika device tidak support AXIS_RELATIVE
+    if (dx == 0f && dy == 0f) {
+        dx = event.x
+        dy = event.y
+    }
+    val scaledDx = (dx * sensitivity).toInt()
+    val scaledDy = (dy * sensitivity).toInt()
+    if (xServer.isRelativeMouseMovement) {
+        xServer.winHandler.mouseEvent(MouseEventFlags.MOVE, scaledDx, scaledDy, 0)
+    } else {
+        xServer.injectPointerMoveDelta(scaledDx, scaledDy)  // ← Delta, bukan Move absolut
+    }
+    true
+}
 
             MotionEvent.ACTION_SCROLL -> {
                 val scrollY = event.getAxisValue(MotionEvent.AXIS_VSCROLL)

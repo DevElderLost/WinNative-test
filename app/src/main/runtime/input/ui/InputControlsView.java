@@ -20,6 +20,7 @@ import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.os.VibratorManager;
 import android.util.SparseArray;
+import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.PointerIcon;
@@ -609,6 +610,14 @@ public class InputControlsView extends View {
   public boolean onGenericMotionEvent(MotionEvent event) {
     if (!editMode && profile != null) {
       ExternalController controller = profile.getController(event.getDeviceId());
+
+// Fallback: cari controller langsung dari device (untuk mouse yang belum di-assign)
+if (controller == null) {
+    InputDevice device = InputDevice.getDevice(event.getDeviceId());
+    if (ExternalController.isMouseDevice(device)) {
+        controller = ExternalController.getController(event.getDeviceId());
+    }
+}
 
       if (controller != null) {
         controller.updateStateFromMotionEvent(event);
