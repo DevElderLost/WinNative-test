@@ -674,6 +674,10 @@ if (controller == null) {
             if (selectedElement != null) {
               selectedElement.setX((int) Mathf.roundTo(event.getX() - offsetX, snappingSize));
               selectedElement.setY((int) Mathf.roundTo(event.getY() - offsetY, snappingSize));
+              if (selectedElement.getType() == ControlElement.Type.STICK) {
+                android.graphics.Rect bb = selectedElement.getBoundingBox();
+                selectedElement.setCurrentPosition(bb.centerX(), bb.centerY());
+              }              
               invalidate();
             }
             break;
