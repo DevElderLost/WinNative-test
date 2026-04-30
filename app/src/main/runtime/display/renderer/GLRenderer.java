@@ -306,7 +306,7 @@ public class GLRenderer
       int screenWidth = xServer.screenInfo.width;
       int screenHeight = xServer.screenInfo.height;
 
-      // Skip occluded windows behind a fullscreen one
+      // Skip occluded windows behind a fullscreen one (logika asli dipertahankan)
       for (int i = renderableWindows.size() - 1; i >= 0; i--) {
         RenderableWindow rWin = renderableWindows.get(i);
         if (rWin.content != null
@@ -317,33 +317,31 @@ public class GLRenderer
         }
       }
 
-      boolean blendEnabled = true;
-
+      // Pass 1: render window forceFullscreen (window besar) terlebih dahulu.
+      // Blend dimatikan agar render opaque — tidak ada window lain yang bisa menutupinya di pass ini.
+      boolean hasForceFullscreen = false;
       for (int i = startIndex; i < renderableWindows.size(); i++) {
         RenderableWindow window = renderableWindows.get(i);
-
-        if (window.forceFullscreen) {
-          // Window besar forceFullscreen: matikan blend agar render opaque
-          if (blendEnabled) {
-            GLES20.glDisable(GLES20.GL_BLEND);
-            blendEnabled = false;
-          }
-        } else {
-          // Window kecil/overlay: aktifkan blend agar tampil di depan dengan alpha benar
-          if (!blendEnabled) {
-            GLES20.glEnable(GLES20.GL_BLEND);
-            GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
-            blendEnabled = true;
-          }
+        if (!window.forceFullscreen) continue;
+        if (!hasForceFullscreen) {
+          GLES20.glDisable(GLES20.GL_BLEND);
+          hasForceFullscreen = true;
         }
-
-        renderDrawable(window.content, window.rootX, window.rootY, windowMaterial, window.forceFullscreen);
+        renderDrawable(window.content, window.rootX, window.rootY, windowMaterial, true);
       }
 
-      // Pastikan blend selalu aktif setelah renderWindows agar renderCursor tidak terpengaruh
-      if (!blendEnabled) {
+      // Restore blend sebelum pass 2
+      if (hasForceFullscreen) {
         GLES20.glEnable(GLES20.GL_BLEND);
         GLES20.glBlendFunc(GLES20.GL_SRC_ALPHA, GLES20.GL_ONE_MINUS_SRC_ALPHA);
+      }
+
+      // Pass 2: render window kecil/overlay di atas window forceFullscreen.
+      // Karena dirender setelah pass 1, z-order dijamin benar — window kecil selalu di depan.
+      for (int i = startIndex; i < renderableWindows.size(); i++) {
+        RenderableWindow window = renderableWindows.get(i);
+        if (window.forceFullscreen) continue;
+        renderDrawable(window.content, window.rootX, window.rootY, windowMaterial, false);
       }
     }
 
