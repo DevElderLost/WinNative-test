@@ -15,6 +15,16 @@ public class ExternalControllerBinding {
   public static final byte AXIS_Z_POSITIVE = -6;
   public static final byte AXIS_RZ_NEGATIVE = -7;
   public static final byte AXIS_RZ_POSITIVE = -8;
+  // Tambah konstanta baru untuk mouse
+  public static final byte MOUSE_LEFT        = -9;
+  public static final byte MOUSE_RIGHT       = -10;
+  public static final byte MOUSE_MIDDLE      = -11;
+  public static final byte MOUSE_SCROLL_UP   = -12;
+  public static final byte MOUSE_SCROLL_DOWN = -13;
+  public static final byte MOUSE_MOVE_LEFT   = -14;
+  public static final byte MOUSE_MOVE_RIGHT  = -15;
+  public static final byte MOUSE_MOVE_UP     = -16;
+  public static final byte MOUSE_MOVE_DOWN   = -17;
   private short keyCode;
   private Binding binding = Binding.NONE;
 
@@ -64,6 +74,24 @@ public class ExternalControllerBinding {
         return "AXIS RZ-";
       case AXIS_RZ_POSITIVE:
         return "AXIS RZ+";
+      case MOUSE_LEFT:        
+        return "MOUSE LEFT";
+      case MOUSE_RIGHT:       
+        return "MOUSE RIGHT";
+      case MOUSE_MIDDLE:      
+        return "MOUSE MIDDLE";
+      case MOUSE_SCROLL_UP:   
+        return "MOUSE SCROLL UP";
+      case MOUSE_SCROLL_DOWN: 
+        return "MOUSE SCROLL DOWN";
+      case MOUSE_MOVE_LEFT:   
+        return "MOUSE MOVE LEFT";
+      case MOUSE_MOVE_RIGHT:  
+        return "MOUSE MOVE RIGHT";
+      case MOUSE_MOVE_UP:     
+        return "MOUSE MOVE UP";
+      case MOUSE_MOVE_DOWN:   
+        return "MOUSE MOVE DOWN";
       default:
         return KeyEvent.keyCodeToString(keyCode).replace("KEYCODE_", "").replace("_", " ");
     }
@@ -118,6 +146,12 @@ public class ExternalControllerBinding {
         return sign > 0 ? KeyEvent.KEYCODE_DPAD_RIGHT : KeyEvent.KEYCODE_DPAD_LEFT;
       case MotionEvent.AXIS_HAT_Y:
         return sign > 0 ? KeyEvent.KEYCODE_DPAD_DOWN : KeyEvent.KEYCODE_DPAD_UP;
+      case MotionEvent.AXIS_VSCROLL:
+        return sign > 0 ? MOUSE_SCROLL_UP : MOUSE_SCROLL_DOWN;
+      case MotionEvent.AXIS_RELATIVE_X:
+        return sign > 0 ? MOUSE_MOVE_RIGHT : MOUSE_MOVE_LEFT;
+      case MotionEvent.AXIS_RELATIVE_Y:
+        return sign > 0 ? MOUSE_MOVE_DOWN : MOUSE_MOVE_UP;
       default:
         return KeyEvent.KEYCODE_UNKNOWN;
     }

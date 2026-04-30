@@ -399,12 +399,19 @@ public class ExternalController {
     return true;
   }
 
+// Tambah method baru
+public static boolean isMouseDevice(InputDevice device) {
+    if (device == null || device.isVirtual()) return false;
+    int sources = device.getSources();
+    return (sources & InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE;
+}
+
   public static ArrayList<ExternalController> getControllers() {
     int[] deviceIds = InputDevice.getDeviceIds();
     ArrayList<ExternalController> controllers = new ArrayList<>();
     for (int i = deviceIds.length - 1; i >= 0; i--) {
       InputDevice device = InputDevice.getDevice(deviceIds[i]);
-      if (isGameController(device)) {
+      if (isGameController(device) || isMouseDevice(device)) {
         ExternalController controller = new ExternalController();
         controller.setId(device.getDescriptor());
         controller.setName(device.getName());
@@ -430,7 +437,7 @@ public class ExternalController {
     for (int i = deviceIds.length - 1; i >= 0; i--) {
       if (deviceIds[i] == deviceId || deviceId == 0) {
         InputDevice device = InputDevice.getDevice(deviceIds[i]);
-        if (isGameController(device)) {
+        if (isGameController(device) || isMouseDevice(device)) {
           ExternalController controller = new ExternalController();
           controller.setId(device.getDescriptor());
           controller.setName(device.getName());
