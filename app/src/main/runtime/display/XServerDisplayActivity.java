@@ -3720,82 +3720,107 @@ case MotionEvent.ACTION_HOVER_MOVE:
         Log.d("ContainerLaunch", "=== setupWineSystemFiles END === container=" + container.id + " firstTimeBoot=" + firstTimeBoot);
     }
 
-    private void configureLsfgEnvVars() {
-        if (shortcut == null || imageFs == null) {
-            envVars.put("DISABLE_LSFG", "1");
-            return;
-        }
-
-        boolean enabled = "1".equals(shortcut.getExtra("lsfgEnabled", "0"));
-        if (!enabled) {
-            envVars.put("DISABLE_LSFG", "1");
-            return;
-        }
-
-        String dllPath = shortcut.getExtra("lsfgDllPath", "");
-        if (dllPath.isEmpty() || !new File(dllPath).isFile()) {
-            Log.w("XServerDisplayActivity", "LSFG requested but no imported Lossless.dll is available");
-            envVars.put("DISABLE_LSFG", "1");
-            return;
-        }
-
-        envVars.remove("DISABLE_LSFG");
-
-        File layerLibrary = GuestProgramLauncherComponent.ensureImageFsNativeLibrary(this, imageFs, "liblsfg-vk.so");
-        if (!layerLibrary.exists()) {
-            Log.w("XServerDisplayActivity", "LSFG requested but liblsfg-vk.so is not available");
-            envVars.put("DISABLE_LSFG", "1");
-            return;
-        }
-
-        File implicitLayerDir = new File(imageFs.getShareDir(), "vulkan/implicit_layer.d");
-        File explicitLayerDir = new File(imageFs.getShareDir(), "vulkan/explicit_layer.d");
-        implicitLayerDir.mkdirs();
-        explicitLayerDir.mkdirs();
-        writeLsfgLayerManifest(
-                new File(implicitLayerDir, "VkLayer_LS_frame_generation.json"),
-                layerLibrary
-        );
-
-        envVars.put("VK_INSTANCE_LAYERS", appendListValue(
-                envVars.get("VK_INSTANCE_LAYERS"),
-                "VK_LAYER_LS_frame_generation",
-                ":"
-        ));
-        envVars.put("VK_LAYER_PATH", appendListValue(
-                envVars.get("VK_LAYER_PATH"),
-                implicitLayerDir.getAbsolutePath() + ":" + explicitLayerDir.getAbsolutePath(),
-                ":"
-        ));
-
-        envVars.put("LSFG_LEGACY", "1");
-        envVars.put("LSFG_MULTIPLIER", clampStringInt(shortcut.getExtra("lsfgMultiplier", "2"), 2, 4));
-        envVars.put("LSFG_FLOW_SCALE", clampStringFloat(shortcut.getExtra("lsfgFlowScale", "0.80"), 0.25f, 1.0f));
-        envVars.put("LSFG_PERFORMANCE_MODE", shortcut.getExtra("lsfgPerformanceMode", "1"));
-        envVars.put("LSFG_HDR_MODE", shortcut.getExtra("lsfgHdrMode", "0"));
-        envVars.put("LSFG_EXPERIMENTAL_PRESENT_MODE", normalizeLsfgPresentMode(shortcut.getExtra("lsfgPresentMode", "fifo")));
-        File lsfgTmpDir = new File(imageFs.getTmpDir(), "lsfg-vk");
-        lsfgTmpDir.mkdirs();
-        File lsfgConfig = new File(lsfgTmpDir, "conf.toml");
-        FileUtils.writeString(lsfgConfig, "version = 1\n[global]\n");
-        envVars.put("LSFG_CONFIG", lsfgConfig.getAbsolutePath());
-        envVars.put("LSFG_LAST_PATH", new File(lsfgTmpDir, "lsfg-vk_last").getAbsolutePath());
-        envVars.put("TMPDIR", lsfgTmpDir.getAbsolutePath());
-
-        envVars.put("LSFG_DLL_PATH", dllPath);
-        envVars.put("LSFG_DLL_PATH_UNIX", dllPath);
-
-        String processExe = shortcut.getExtra("launch_exe_path", "");
-        if (processExe.isEmpty()) processExe = shortcut.path;
-        if (processExe != null && !processExe.isEmpty()) {
-            String processName = new File(processExe).getName();
-            envVars.put("LSFG_PROCESS", processName);
-            envVars.put("LSFG_PROCESS_EXE", processName);
-        }
-
-        Log.d("XServerDisplayActivity", "LSFG enabled: dllPath='" + dllPath + "' multiplier="
-                + envVars.get("LSFG_MULTIPLIER") + " flowScale=" + envVars.get("LSFG_FLOW_SCALE"));
+private void configureLsfgEnvVars() {
+    if (shortcut == null || imageFs == null) {
+        envVars.put("DISABLE_LSFG", "1");
+        return;
     }
+
+    boolean enabled = "1".equals(shortcut.getExtra("lsfgEnabled", "0"));
+    if (!enabled) {
+        envVars.put("DISABLE_LSFG", "1");
+        return;
+    }
+
+    String dllPath = shortcut.getExtra("lsfgDllPath", "");
+    if (dllPath.isEmpty() || !new File(dllPath).isFile()) {
+        Log.w("XServerDisplayActivity", "LSFG requested but no imported Lossless.dll is available");
+        envVars.put("DISABLE_LSFG", "1");
+        return;
+    }
+
+    envVars.remove("DISABLE_LSFG");
+
+    File layerLibrary = GuestProgramLauncherComponent.ensureImageFsNativeLibrary(this, imageFs, "liblsfg-vk.so");
+    if (!layerLibrary.exists()) {
+        Log.w("XServerDisplayActivity", "LSFG requested but liblsfg-vk.so is not available");
+        envVars.put("DISABLE_LSFG", "1");
+        return;
+    }
+
+    File implicitLayerDir = new File(imageFs.getShareDir(), "vulkan/implicit_layer.d");
+    File explicitLayerDir = new File(imageFs.getShareDir(), "vulkan/explicit_layer.d");
+    implicitLayerDir.mkdirs();
+    explicitLayerDir.mkdirs();
+    writeLsfgLayerManifest(
+            new File(implicitLayerDir, "VkLayer_LS_frame_generation.json"),
+            layerLibrary
+    );
+
+    envVars.put("VK_INSTANCE_LAYERS", appendListValue(
+            envVars.get("VK_INSTANCE_LAYERS"),
+            "VK_LAYER_LS_frame_generation", ":"));
+    envVars.put("VK_LAYER_PATH", appendListValue(
+            envVars.get("VK_LAYER_PATH"),
+            implicitLayerDir.getAbsolutePath() + ":" + explicitLayerDir.getAbsolutePath(), ":"));
+
+    // Resolve process name
+    String processExe = shortcut.getExtra("launch_exe_path", "");
+    if (processExe.isEmpty()) processExe = shortcut.path;
+    String processName = (processExe != null && !processExe.isEmpty())
+            ? new File(processExe).getName() : "";
+
+    // Parse settings
+    int multiplier = Integer.parseInt(clampStringInt(shortcut.getExtra("lsfgMultiplier", "2"), 2, 4));
+    String flowScale = clampStringFloat(shortcut.getExtra("lsfgFlowScale", "0.80"), 0.25f, 1.0f);
+    boolean perfMode = "1".equals(shortcut.getExtra("lsfgPerformanceMode", "1"));
+    boolean hdrMode  = "1".equals(shortcut.getExtra("lsfgHdrMode", "0"));
+
+    // Setup tmp dir untuk LSFG — JANGAN override TMPDIR global
+    File lsfgTmpDir = new File(imageFs.getTmpDir(), "lsfg-vk");
+    lsfgTmpDir.mkdirs();
+
+    // Tulis conf.toml lengkap
+    File lsfgConfig = new File(lsfgTmpDir, "conf.toml");
+    StringBuilder toml = new StringBuilder();
+    toml.append("version = 1\n");
+    toml.append("[global]\n");
+    toml.append("dll_path = \"").append(dllPath.replace("\\", "\\\\")).append("\"\n\n");
+    if (!processName.isEmpty()) {
+        toml.append("[[game]]\n");
+        toml.append("exe = \"").append(processName).append("\"\n");
+        toml.append("multiplier = ").append(multiplier).append("\n");
+        toml.append("flow_scale = ").append(flowScale).append("\n");
+        toml.append("performance_mode = ").append(perfMode ? "true" : "false").append("\n");
+        toml.append("hdr_mode = ").append(hdrMode ? "true" : "false").append("\n");
+    }
+    FileUtils.writeString(lsfgConfig, toml.toString());
+
+    envVars.put("LSFG_LEGACY", "1");
+    envVars.put("LSFG_CONFIG", lsfgConfig.getAbsolutePath());
+    envVars.put("LSFG_LAST_PATH", new File(lsfgTmpDir, "lsfg-vk_last").getAbsolutePath());
+    envVars.put("LSFG_TMP_DIR", lsfgTmpDir.getAbsolutePath());  // ← bukan TMPDIR
+    // HAPUS: envVars.put("TMPDIR", lsfgTmpDir.getAbsolutePath());
+
+    envVars.put("LSFG_MULTIPLIER", String.valueOf(multiplier));
+    envVars.put("LSFG_FLOW_SCALE", flowScale);
+    envVars.put("LSFG_PERFORMANCE_MODE", perfMode ? "1" : "0");
+    envVars.put("LSFG_HDR_MODE", hdrMode ? "1" : "0");
+    envVars.put("LSFG_EXPERIMENTAL_PRESENT_MODE",
+            normalizeLsfgPresentMode(shortcut.getExtra("lsfgPresentMode", "fifo")));
+    envVars.put("LSFG_DLL_PATH", dllPath);
+    envVars.put("LSFG_DLL_PATH_UNIX", dllPath);
+
+    if (!processName.isEmpty()) {
+        envVars.put("LSFG_PROCESS", processName);
+        envVars.put("LSFG_PROCESS_EXE", processName);
+    }
+
+    Log.d("XServerDisplayActivity", "LSFG enabled: dllPath='" + dllPath
+            + "' process='" + processName
+            + "' multiplier=" + multiplier
+            + " flowScale=" + flowScale);
+}
 
     private void writeLsfgLayerManifest(File manifestFile, File layerLibrary) {
         String manifest = "{\n" +
