@@ -3720,116 +3720,115 @@ case MotionEvent.ACTION_HOVER_MOVE:
         Log.d("ContainerLaunch", "=== setupWineSystemFiles END === container=" + container.id + " firstTimeBoot=" + firstTimeBoot);
     }
 
-private void configureLsfgEnvVars() {
-    if (shortcut == null || imageFs == null) {
-        envVars.put("DISABLE_LSFG", "1");
-        return;
-    }
+// Versi runtime — naikkan jika ada update liblsfg-vk-layer.so di APK assets
+// agar .so di-copy ulang ke container (mengikuti pola GameNative RUNTIME_VERSION)
+private static final int LSFG_RUNTIME_VERSION = 1;
+
+private void prepareLsfgRuntime() {
+    // Hanya install .so dan manifest ke per-container path.
+    // Semua env vars (LSFG_CONFIG, LSFG_PROCESS, VK_LAYER_PATH, dll)
+    // di-set di GuestProgramLauncherComponent.execGuestProgram() agar
+    // benar-benar sampai ke proses Wine.
+    if (shortcut == null || imageFs == null) return;
 
     boolean enabled = "1".equals(shortcut.getExtra("lsfgEnabled", "0"));
+
+    // Per-container paths (mengikuti konvensi GameNative)
+    File rootDir = imageFs.getRootDir();
+    String containerHome = rootDir.getPath() + "/home/xuser";
+    File containerLibDir   = new File(containerHome + "/.local/lib");
+    File containerLayerDir = new File(containerHome + "/.local/share/vulkan/implicit_layer.d");
+    File manifestFile      = new File(containerLayerDir, "VkLayer_LS_frame_generation.json");
+    File soDestFile        = new File(containerLibDir, "liblsfg-vk-layer.so");
+
     if (!enabled) {
-        envVars.put("DISABLE_LSFG", "1");
+        // Hapus manifest agar Vulkan loader tidak memuat layer — jangan hapus .so
+        if (manifestFile.exists()) {
+            manifestFile.delete();
+            Log.d("XServerDisplayActivity", "LSFG disabled — deleted manifest");
+        }
         return;
     }
 
     String dllPath = shortcut.getExtra("lsfgDllPath", "");
     if (dllPath.isEmpty() || !new File(dllPath).isFile()) {
         Log.w("XServerDisplayActivity", "LSFG requested but no imported Lossless.dll is available");
-        envVars.put("DISABLE_LSFG", "1");
+        if (manifestFile.exists()) manifestFile.delete();
         return;
     }
 
-    envVars.remove("DISABLE_LSFG");
+    // Cek versi runtime — jika belum di-install atau versi lama, copy dari APK assets
+    // Mengikuti pola GameNative LsfgVkManager.ensureRuntimeInstalled()
+    String installedVersion = container != null
+            ? container.getExtra("lsfgRuntimeVersion", "0") : "0";
+    boolean needsInstall = !soDestFile.exists()
+            || !Integer.toString(LSFG_RUNTIME_VERSION).equals(installedVersion);
 
-    File layerLibrary = GuestProgramLauncherComponent.ensureImageFsNativeLibrary(this, imageFs, "liblsfg-vk.so");
-    if (!layerLibrary.exists()) {
-        Log.w("XServerDisplayActivity", "LSFG requested but liblsfg-vk.so is not available");
-        envVars.put("DISABLE_LSFG", "1");
+    if (needsInstall) {
+        containerLibDir.mkdirs();
+        boolean copied = copyLsfgSoFromAssets(soDestFile);
+        if (!copied) {
+            Log.w("XServerDisplayActivity", "LSFG: failed to install liblsfg-vk-layer.so from assets");
+            if (manifestFile.exists()) manifestFile.delete();
+            return;
+        }
+        if (container != null) {
+            container.putExtra("lsfgRuntimeVersion", Integer.toString(LSFG_RUNTIME_VERSION));
+            container.saveData();
+        }
+        Log.d("XServerDisplayActivity", "LSFG: installed liblsfg-vk-layer.so v" + LSFG_RUNTIME_VERSION
+                + " to " + soDestFile.getAbsolutePath());
+    }
+
+    if (!soDestFile.exists()) {
+        Log.w("XServerDisplayActivity", "LSFG: liblsfg-vk-layer.so not found after install attempt");
+        if (manifestFile.exists()) manifestFile.delete();
         return;
     }
 
-    File implicitLayerDir = new File(imageFs.getShareDir(), "vulkan/implicit_layer.d");
-    File explicitLayerDir = new File(imageFs.getShareDir(), "vulkan/explicit_layer.d");
-    implicitLayerDir.mkdirs();
-    explicitLayerDir.mkdirs();
-    writeLsfgLayerManifest(
-            new File(implicitLayerDir, "VkLayer_LS_frame_generation.json"),
-            layerLibrary
-    );
+    // Tulis manifest dengan library_path RELATIF (sama persis dengan GameNative)
+    // Dari implicit_layer.d/ → naik 3 level → lib/liblsfg-vk-layer.so
+    containerLayerDir.mkdirs();
+    writeLsfgLayerManifest(manifestFile);
 
-    envVars.put("VK_INSTANCE_LAYERS", appendListValue(
-            envVars.get("VK_INSTANCE_LAYERS"),
-            "VK_LAYER_LS_frame_generation", ":"));
-    envVars.put("VK_LAYER_PATH", appendListValue(
-            envVars.get("VK_LAYER_PATH"),
-            implicitLayerDir.getAbsolutePath() + ":" + explicitLayerDir.getAbsolutePath(), ":"));
+    // Buat config dir dan tmp dir (dipakai oleh execGuestProgram nanti)
+    new File(containerHome + "/.config/lsfg-vk").mkdirs();
+    new File(containerHome + "/.local/share/lsfg-vk").mkdirs();
 
-    // Resolve process name
-    String processExe = shortcut.getExtra("launch_exe_path", "");
-    if (processExe.isEmpty()) processExe = shortcut.path;
-    String processName = (processExe != null && !processExe.isEmpty())
-            ? new File(processExe).getName() : "";
-
-    // Parse settings
-    int multiplier = Integer.parseInt(clampStringInt(shortcut.getExtra("lsfgMultiplier", "2"), 2, 4));
-    String flowScale = clampStringFloat(shortcut.getExtra("lsfgFlowScale", "0.80"), 0.25f, 1.0f);
-    boolean perfMode = "1".equals(shortcut.getExtra("lsfgPerformanceMode", "1"));
-    boolean hdrMode  = "1".equals(shortcut.getExtra("lsfgHdrMode", "0"));
-
-    // Setup tmp dir untuk LSFG — JANGAN override TMPDIR global
-    File lsfgTmpDir = new File(imageFs.getTmpDir(), "lsfg-vk");
-    lsfgTmpDir.mkdirs();
-
-    // Tulis conf.toml lengkap
-    File lsfgConfig = new File(lsfgTmpDir, "conf.toml");
-    StringBuilder toml = new StringBuilder();
-    toml.append("version = 1\n");
-    toml.append("[global]\n");
-    toml.append("dll_path = \"").append(dllPath.replace("\\", "\\\\")).append("\"\n\n");
-    if (!processName.isEmpty()) {
-        toml.append("[[game]]\n");
-        toml.append("exe = \"").append(processName).append("\"\n");
-        toml.append("multiplier = ").append(multiplier).append("\n");
-        toml.append("flow_scale = ").append(flowScale).append("\n");
-        toml.append("performance_mode = ").append(perfMode ? "true" : "false").append("\n");
-        toml.append("hdr_mode = ").append(hdrMode ? "true" : "false").append("\n");
-    }
-    FileUtils.writeString(lsfgConfig, toml.toString());
-
-    envVars.put("LSFG_LEGACY", "1");
-    envVars.put("LSFG_CONFIG", lsfgConfig.getAbsolutePath());
-    envVars.put("LSFG_LAST_PATH", new File(lsfgTmpDir, "lsfg-vk_last").getAbsolutePath());
-    envVars.put("LSFG_TMP_DIR", lsfgTmpDir.getAbsolutePath());  // ← bukan TMPDIR
-    // HAPUS: envVars.put("TMPDIR", lsfgTmpDir.getAbsolutePath());
-
-    envVars.put("LSFG_MULTIPLIER", String.valueOf(multiplier));
-    envVars.put("LSFG_FLOW_SCALE", flowScale);
-    envVars.put("LSFG_PERFORMANCE_MODE", perfMode ? "1" : "0");
-    envVars.put("LSFG_HDR_MODE", hdrMode ? "1" : "0");
-    envVars.put("LSFG_EXPERIMENTAL_PRESENT_MODE",
-            normalizeLsfgPresentMode(shortcut.getExtra("lsfgPresentMode", "fifo")));
-    envVars.put("LSFG_DLL_PATH", dllPath);
-    envVars.put("LSFG_DLL_PATH_UNIX", dllPath);
-
-    if (!processName.isEmpty()) {
-        envVars.put("LSFG_PROCESS", processName);
-        envVars.put("LSFG_PROCESS_EXE", processName);
-    }
-
-    Log.d("XServerDisplayActivity", "LSFG enabled: dllPath='" + dllPath
-            + "' process='" + processName
-            + "' multiplier=" + multiplier
-            + " flowScale=" + flowScale);
+    Log.d("XServerDisplayActivity", "LSFG runtime prepared:"
+            + " so=" + soDestFile.getAbsolutePath()
+            + " manifest=" + manifestFile.getAbsolutePath());
 }
 
-    private void writeLsfgLayerManifest(File manifestFile, File layerLibrary) {
+private boolean copyLsfgSoFromAssets(File destFile) {
+    // Nama asset sesuai folder APK assets (sama dengan GameNative)
+    String assetPath = "lsfg_vk/android_arm64_v8a/liblsfg-vk-layer.so";
+    try (java.io.InputStream is = getAssets().open(assetPath);
+         java.io.FileOutputStream fos = new java.io.FileOutputStream(destFile)) {
+        byte[] buf = new byte[8192];
+        int len;
+        while ((len = is.read(buf)) != -1) {
+            fos.write(buf, 0, len);
+        }
+        destFile.setExecutable(true, false);
+        return true;
+    } catch (Exception e) {
+        Log.e("XServerDisplayActivity", "Failed to copy lsfg-vk-layer.so from assets", e);
+        return false;
+    }
+}
+
+    private void writeLsfgLayerManifest(File manifestFile) {
+        // library_path RELATIF dari implicit_layer.d/ → naik 3 level → lib/
+        // Struktur: .local/share/vulkan/implicit_layer.d/  →  ../../../lib/liblsfg-vk-layer.so
+        // Ini sama persis dengan manifest GameNative di APK assets
         String manifest = "{\n" +
                 "  \"file_format_version\": \"1.0.0\",\n" +
                 "  \"layer\": {\n" +
                 "    \"name\": \"VK_LAYER_LS_frame_generation\",\n" +
                 "    \"type\": \"GLOBAL\",\n" +
                 "    \"api_version\": \"1.4.313\",\n" +
-                "    \"library_path\": \"" + layerLibrary.getAbsolutePath().replace("\\", "\\\\") + "\",\n" +
+                "    \"library_path\": \"../../../lib/liblsfg-vk-layer.so\",\n" +
                 "    \"implementation_version\": \"1\",\n" +
                 "    \"description\": \"Lossless Scaling frame generation layer\",\n" +
                 "    \"functions\": {\n" +
@@ -3958,7 +3957,7 @@ private void configureLsfgEnvVars() {
             // Normalize synchronization environment variables (NTSync / ESync).
             // This auto-detects NTSync and falls back to ESync when unavailable.
             normalizeSyncEnvVars(envVars);
-            configureLsfgEnvVars();
+            prepareLsfgRuntime();
 
             ArrayList<String> bindingPaths = new ArrayList<>();
             String drives = shortcut != null ? getShortcutSetting("drives", container.getDrives()) : container.getDrives();
