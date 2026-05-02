@@ -19,15 +19,36 @@ public final class DXVKConfigUtils {
     }
 
     public static void setEnvVars(Context context, KeyValueSet config, EnvVars envVars) {
-        setEnvVars(context, config, envVars, 0);
+        setEnvVars(context, config, envVars, 0, null);
     }
 
     public static void setEnvVars(Context context, KeyValueSet config, EnvVars envVars, int refreshRateOverride) {
+        setEnvVars(context, config, envVars, refreshRateOverride, null);
+    }
+
+    /**
+     * @param lsfgPresentMode present mode LSFG: "fifo", "mailbox", "immediate", atau null jika LSFG disabled.
+     *                         Mengontrol dxgi.syncInterval di DXVK config agar sesuai dengan kebutuhan LSFG:
+     *                         - null / "immediate" → syncInterval=0 (Immediate, perilaku default)
+     *                         - "fifo"             → syncInterval=1 (VSync on, FIFO)
+     *                         - "mailbox"          → syncInterval=0, DXVK pilih Mailbox via swapchain_maintenance1
+     */
+    public static void setEnvVars(Context context, KeyValueSet config, EnvVars envVars,
+                                   int refreshRateOverride, String lsfgPresentMode) {
         String content = "";
 
         if (refreshRateOverride > 0) {
             String rateStr = String.valueOf(refreshRateOverride);
-            content += "dxgi.syncInterval = 0; ";
+            // Tentukan syncInterval berdasarkan lsfgPresentMode:
+            // - null/immediate : 0 (Immediate, tidak ada VSync)
+            // - fifo           : 1 (VSync on, FIFO — LSFG butuh ini untuk frame timing)
+            // - mailbox        : 0 (Mailbox dipilih DXVK otomatis via swapchain_maintenance1
+            //                       karena tidak ada cara set Mailbox eksplisit lewat syncInterval)
+            int syncInterval = 0;
+            if ("fifo".equals(lsfgPresentMode)) {
+                syncInterval = 1;
+            }
+            content += "dxgi.syncInterval = " + syncInterval + "; ";
             content += "dxgi.maxFrameRate = " + rateStr + "; ";
             content += "d3d9.maxFrameRate = " + rateStr;
             envVars.put("DXVK_FRAME_RATE", rateStr);
