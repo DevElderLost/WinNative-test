@@ -330,7 +330,7 @@ class GameSettingsStateHolder {
     val lsfgDllPath = mutableStateOf("")
     val lsfgMultiplierEntries = mutableStateOf(listOf("2x", "3x", "4x"))
     val lsfgSelectedMultiplier = mutableIntStateOf(0)
-    val lsfgFlowScale = mutableIntStateOf(100)
+    val lsfgFlowScale = mutableIntStateOf(80)
     val lsfgPerformanceMode = mutableStateOf(true)
     val lsfgHdrMode = mutableStateOf(false)
     val lsfgPresentModeEntries = mutableStateOf(listOf("FIFO", "Mailbox", "Immediate"))
@@ -468,12 +468,12 @@ private const val SEC_INPUT = 7
 private const val SEC_ADVANCED = 8
 private const val SEC_LSFG = 9
 
-private fun buildSections(isSteam: Boolean): List<Pair<Int, SidebarSection>> {
+private fun buildSections(isSteam: Boolean, isContainer: Boolean): List<Pair<Int, SidebarSection>> {
     val list = mutableListOf<Pair<Int, SidebarSection>>()
     list += SEC_GENERAL to SidebarSection(Icons.Outlined.Tune, R.string.settings_general_title)
     if (isSteam) list += SEC_STEAM to SidebarSection(Icons.Outlined.Science, R.string.steam_section_title)
     list += SEC_DISPLAY to SidebarSection(Icons.Outlined.Monitor, R.string.common_ui_graphics)
-    if (!isContainer) list += SEC_LSFG to SidebarSection(Icons.Outlined.Extension, R.string.settings_lsfg_title)    
+    if (!isContainer) list += SEC_LSFG to SidebarSection(Icons.Outlined.Extension, R.string.settings_lsfg_title)
     list += SEC_ADVANCED to SidebarSection(Icons.Outlined.Settings, R.string.common_ui_advanced)
     list += SEC_INPUT to SidebarSection(Icons.Outlined.SportsEsports, R.string.common_ui_input_controls)
     list += SEC_VARIABLES to SidebarSection(Icons.Outlined.Code, R.string.container_config_variables)
@@ -2896,24 +2896,6 @@ private fun LsfgSection(
             entries = state.lsfgMultiplierEntries.value,
             selectedIndex = state.lsfgSelectedMultiplier.intValue,
             onSelected = { state.lsfgSelectedMultiplier.intValue = it },
-            enabled = state.lsfgEnabled.value
-        )
-
-        Spacer(Modifier.height(14.dp))
-
-        SettingSlider(
-            label = stringResource(R.string.settings_lsfg_flow_scale),
-            value = state.lsfgFlowScale.intValue,
-            range = 25..100,
-            onValueChange = { state.lsfgFlowScale.intValue = it.coerceIn(25, 100) }
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        SettingCheckbox(
-            label = stringResource(R.string.settings_lsfg_performance_mode),
-            checked = state.lsfgPerformanceMode.value,
-            onCheckedChange = { state.lsfgPerformanceMode.value = it },
             enabled = state.lsfgEnabled.value
         )
 
