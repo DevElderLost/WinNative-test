@@ -3770,7 +3770,7 @@ case MotionEvent.ACTION_HOVER_MOVE:
 
         envVars.put("LSFG_LEGACY", "1");
         envVars.put("LSFG_MULTIPLIER", clampStringInt(shortcut.getExtra("lsfgMultiplier", "2"), 2, 4));
-        envVars.put("LSFG_FLOW_SCALE", clampStringFloat(shortcut.getExtra("lsfgFlowScale", "1.0"), 0.25f, 1.0f));
+        envVars.put("LSFG_FLOW_SCALE", clampStringFloat(shortcut.getExtra("lsfgFlowScale", "0.80"), 0.25f, 1.0f));
         envVars.put("LSFG_PERFORMANCE_MODE", shortcut.getExtra("lsfgPerformanceMode", "1"));
         envVars.put("LSFG_HDR_MODE", shortcut.getExtra("lsfgHdrMode", "0"));
         envVars.put("LSFG_EXPERIMENTAL_PRESENT_MODE", normalizeLsfgPresentMode(shortcut.getExtra("lsfgPresentMode", "fifo")));
@@ -4952,18 +4952,12 @@ if (isPointerMotionEvent(event)) {
 
             Iterator<String[]> oldWinComponentsIter = new KeyValueSet(container.getExtra("wincomponents", Container.FALLBACK_WINCOMPONENTS)).iterator();
 
-            // Bundled wincomponents/*.tzst archives only carry x86_64 PEs in system32/
-            // (and i386 in syswow64/). Extracting them into an ARM64EC prefix poisons
-            // system32 with wrong-arch DLLs, which kills the PE loader for any process
-            // that imports them — e.g. vc_redist refusing to launch.
-            boolean isArm64EC = wineInfo != null && wineInfo.isArm64EC();
-
             for (String[] wincomponent : new KeyValueSet(wincomponents)) {
                 if (wincomponent[1].equals(oldWinComponentsIter.next()[1]) && !firstTimeBoot) continue;
                 String identifier = wincomponent[0];
                 boolean useNative = wincomponent[1].equals("1");
 
-                if (useNative && !isArm64EC) {
+                if (useNative) {
                     TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, "wincomponents/"+identifier+".tzst", windowsDir, onExtractFileListener);
                 }
                 else {
@@ -4973,8 +4967,7 @@ if (isPointerMotionEvent(event)) {
                         dlls.add(!dlname.endsWith(".exe") ? dlname+".dll" : dlname);
                     }
                 }
-                Log.d("XServerDisplayActivity", "Setting wincomponent " + identifier + " to " + useNative
-                        + (useNative && isArm64EC ? " (arm64ec: tzst skipped, restoring arch-correct DLLs)" : ""));
+                Log.d("XServerDisplayActivity", "Setting wincomponent " + identifier + " to " + String.valueOf(useNative));
                 WineUtils.overrideWinComponentDlls(this, container, identifier, useNative);
                 WineUtils.setWinComponentRegistryKeys(systemRegFile, identifier, useNative, this);
             }
@@ -4987,33 +4980,24 @@ if (isPointerMotionEvent(event)) {
     private void restoreOriginalDllFiles(final String... dlls) {
         File rootDir = imageFs.getRootDir();
         File windowsDir = new File(rootDir, ImageFs.WINEPREFIX+"/drive_c/windows");
+        File system32dlls = null;
+        File syswow64dlls = null;
 
-        File system32dlls = wineInfo.isArm64EC()
-                ? new File(imageFs.getWinePath() + "/lib/wine/aarch64-windows")
-                : new File(imageFs.getWinePath() + "/lib/wine/x86_64-windows");
-        File syswow64dlls = new File(imageFs.getWinePath() + "/lib/wine/i386-windows");
+        if (wineInfo.isArm64EC())
+            system32dlls = new File(imageFs.getWinePath() + "/lib/wine/aarch64-windows");
+        else
+            system32dlls = new File(imageFs.getWinePath() + "/lib/wine/x86_64-windows");
+
+        syswow64dlls = new File(imageFs.getWinePath() + "/lib/wine/i386-windows");
+
 
         for (String dll : dlls) {
-            restoreOneDll(new File(system32dlls, dll), new File(windowsDir, "system32/" + dll));
-            restoreOneDll(new File(syswow64dlls, dll), new File(windowsDir, "syswow64/" + dll));
-        }
-   }
-
-    // Copy src→dst. If src is missing we MUST delete dst; otherwise a stale wrong-arch
-    // PE (e.g. an x86_64 atl100.dll left over from a prior native overlay on an
-    // ARM64EC prefix) sticks around and breaks the PE loader for every process that
-    // imports it.
-    private static void restoreOneDll(File srcFile, File dstFile) {
-        if (srcFile.exists()) {
-            if (!FileUtils.copy(srcFile, dstFile))
-                Log.w("XServerDisplayActivity", "restoreOriginalDllFiles: copy failed " + srcFile + " -> " + dstFile);
-            return;
-        }
-        if (dstFile.exists()) {
-            if (dstFile.delete())
-                Log.w("XServerDisplayActivity", "restoreOriginalDllFiles: no source for " + srcFile + ", deleted stale " + dstFile);
-            else
-                Log.e("XServerDisplayActivity", "restoreOriginalDllFiles: no source for " + srcFile + " and failed to delete stale " + dstFile);
+            File srcFile = new File(system32dlls, dll);
+            File dstFile = new File(windowsDir, "system32/" + dll);
+            FileUtils.copy(srcFile, dstFile);
+            srcFile = new File(syswow64dlls, dll);
+            dstFile = new File(windowsDir, "syswow64/" + dll);
+            FileUtils.copy(srcFile, dstFile);
         }
    }
 
