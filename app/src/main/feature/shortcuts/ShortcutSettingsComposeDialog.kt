@@ -453,7 +453,7 @@ class ShortcutSettingsComposeDialog private constructor(
         state.lsfgDllPath.value = originalLsfgDllPath
         val lsfgMultiplier = shortcut.getExtra("lsfgMultiplier", "2").toIntOrNull() ?: 2
         state.lsfgSelectedMultiplier.intValue = (lsfgMultiplier - 2).coerceIn(0, 2)
-        val flowScale = shortcut.getExtra("lsfgFlowScale", "1.0").toFloatOrNull() ?: 1.0f
+        val flowScale = shortcut.getExtra("lsfgFlowScale", "0.80").toFloatOrNull() ?: 0.80f
         state.lsfgFlowScale.intValue = (flowScale * 100f).toInt().coerceIn(25, 100)
         state.lsfgPerformanceMode.value = shortcut.getExtra("lsfgPerformanceMode", "1") == "1"
         state.lsfgHdrMode.value = shortcut.getExtra("lsfgHdrMode", "0") == "1"
