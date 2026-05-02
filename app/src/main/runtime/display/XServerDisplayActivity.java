@@ -3722,7 +3722,7 @@ case MotionEvent.ACTION_HOVER_MOVE:
 
 // Versi runtime — naikkan jika ada update liblsfg-vk-layer.so di APK assets
 // agar .so di-copy ulang ke container (mengikuti pola GameNative RUNTIME_VERSION)
-private static final int LSFG_RUNTIME_VERSION = 1;
+private static final int LSFG_RUNTIME_VERSION = 2;
 
 private void prepareLsfgRuntime() {
     // Hanya install .so dan manifest ke per-container path.
