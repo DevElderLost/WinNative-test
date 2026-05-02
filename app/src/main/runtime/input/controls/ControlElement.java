@@ -624,37 +624,63 @@ return boundingBox;
           float offsetX = snappingSize * 2 * scale;
           float offsetY = snappingSize * 3 * scale;
           float start = snappingSize * scale;
-          path.reset();
 
-          path.moveTo(cx, cy - start);
-          path.lineTo(cx - offsetX, cy - offsetY);
-          path.lineTo(cx - offsetX, boundingBox.top);
-          path.lineTo(cx + offsetX, boundingBox.top);
-          path.lineTo(cx + offsetX, cy - offsetY);
-          path.close();
+          // 4 path terpisah per arah: 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT
+          Path[] dpadPaths = new Path[4];
 
-          path.moveTo(cx - start, cy);
-          path.lineTo(cx - offsetY, cy - offsetX);
-          path.lineTo(boundingBox.left, cy - offsetX);
-          path.lineTo(boundingBox.left, cy + offsetX);
-          path.lineTo(cx - offsetY, cy + offsetX);
-          path.close();
+          // UP (index 0)
+          dpadPaths[0] = new Path();
+          dpadPaths[0].moveTo(cx, cy - start);
+          dpadPaths[0].lineTo(cx - offsetX, cy - offsetY);
+          dpadPaths[0].lineTo(cx - offsetX, boundingBox.top);
+          dpadPaths[0].lineTo(cx + offsetX, boundingBox.top);
+          dpadPaths[0].lineTo(cx + offsetX, cy - offsetY);
+          dpadPaths[0].close();
 
-          path.moveTo(cx, cy + start);
-          path.lineTo(cx - offsetX, cy + offsetY);
-          path.lineTo(cx - offsetX, boundingBox.bottom);
-          path.lineTo(cx + offsetX, boundingBox.bottom);
-          path.lineTo(cx + offsetX, cy + offsetY);
-          path.close();
+          // RIGHT (index 1)
+          dpadPaths[1] = new Path();
+          dpadPaths[1].moveTo(cx + start, cy);
+          dpadPaths[1].lineTo(cx + offsetY, cy - offsetX);
+          dpadPaths[1].lineTo(boundingBox.right, cy - offsetX);
+          dpadPaths[1].lineTo(boundingBox.right, cy + offsetX);
+          dpadPaths[1].lineTo(cx + offsetY, cy + offsetX);
+          dpadPaths[1].close();
 
-          path.moveTo(cx + start, cy);
-          path.lineTo(cx + offsetY, cy - offsetX);
-          path.lineTo(boundingBox.right, cy - offsetX);
-          path.lineTo(boundingBox.right, cy + offsetX);
-          path.lineTo(cx + offsetY, cy + offsetX);
-          path.close();
+          // DOWN (index 2)
+          dpadPaths[2] = new Path();
+          dpadPaths[2].moveTo(cx, cy + start);
+          dpadPaths[2].lineTo(cx - offsetX, cy + offsetY);
+          dpadPaths[2].lineTo(cx - offsetX, boundingBox.bottom);
+          dpadPaths[2].lineTo(cx + offsetX, boundingBox.bottom);
+          dpadPaths[2].lineTo(cx + offsetX, cy + offsetY);
+          dpadPaths[2].close();
 
-          canvas.drawPath(path, paint);
+          // LEFT (index 3)
+          dpadPaths[3] = new Path();
+          dpadPaths[3].moveTo(cx - start, cy);
+          dpadPaths[3].lineTo(cx - offsetY, cy - offsetX);
+          dpadPaths[3].lineTo(boundingBox.left, cy - offsetX);
+          dpadPaths[3].lineTo(boundingBox.left, cy + offsetX);
+          dpadPaths[3].lineTo(cx - offsetY, cy + offsetX);
+          dpadPaths[3].close();
+
+          // Fill arah yang sedang ditekan (sama dengan fillColor BUTTON saat engaged)
+          for (int i = 0; i < 4; i++) {
+            if (states[i]) {
+              paint.setStyle(Paint.Style.FILL);
+              paint.setColor(fillColor);
+              canvas.drawPath(dpadPaths[i], paint);
+            }
+          }
+
+          // Stroke semua arah
+          paint.setStyle(Paint.Style.STROKE);
+          paint.setColor(primaryColor);
+          paint.setStrokeWidth(strokeWidth);
+          for (int i = 0; i < 4; i++) {
+            canvas.drawPath(dpadPaths[i], paint);
+          }
+
           break;
         }
       case RANGE_BUTTON:
