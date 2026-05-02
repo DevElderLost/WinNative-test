@@ -4637,7 +4637,16 @@ private boolean copyLsfgSoFromAssets(File destFile) {
 
         if (dxwrapper.contains("dxvk")) {
             int refreshRateOverride = getDxvkFrameRateOverride();
-            DXVKConfigUtils.setEnvVars(this, dxwrapperConfig, envVars, refreshRateOverride);
+            // Teruskan lsfgPresentMode ke DXVKConfigUtils agar syncInterval
+            // disesuaikan: fifo→1, mailbox/immediate/null→0
+            String lsfgPresentMode = null;
+            if (shortcut != null
+                    && "1".equals(shortcut.getExtra("lsfgEnabled", "0"))
+                    && !shortcut.getExtra("lsfgDllPath", "").isEmpty()) {
+                lsfgPresentMode = shortcut.getExtra("lsfgPresentMode", "fifo")
+                        .toLowerCase(java.util.Locale.ROOT);
+            }
+            DXVKConfigUtils.setEnvVars(this, dxwrapperConfig, envVars, refreshRateOverride, lsfgPresentMode);
             String version = dxwrapperConfig.get("version");
             if (version.equals("1.11.1-sarek")) {
                 Log.d("GraphicsDriverExtraction", "Disabling Wrapper PATCH_OPCONSTCOMP SPIR-V pass");
