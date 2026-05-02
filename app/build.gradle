@@ -13,7 +13,7 @@ task checkSubmodules {
     // pass the Gradle Project object into the execution closure (which breaks the Configuration Cache).
         def submodulePaths = [
             file("src/main/cpp/adrenotools").absolutePath,
-            file("src/main/cpp/lsfg").absolutePath
+            file("src/main/cpp/lsfg-vk-android").absolutePath
         ]
     
     doFirst {
