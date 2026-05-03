@@ -372,6 +372,17 @@ class GameSettingsStateHolder {
 
     // Loading state
     val isLoaded = mutableStateOf(false)
+
+    // LSFG
+    val lsfgEnabled = mutableStateOf(false)
+    val lsfgDllPath = mutableStateOf("")
+    val lsfgMultiplierEntries = mutableStateOf(listOf("2x", "3x", "4x"))
+    val lsfgSelectedMultiplier = mutableIntStateOf(0)
+    val lsfgFlowScale = mutableIntStateOf(80)
+    val lsfgPerformanceMode = mutableStateOf(true)
+    val lsfgHdrMode = mutableStateOf(false)
+    val lsfgPresentModeEntries = mutableStateOf(listOf("FIFO", "Mailbox", "Immediate"))
+    val lsfgSelectedPresentMode = mutableIntStateOf(0)
 }
 
 // ---------------------------------------------------------------------------
@@ -452,6 +463,7 @@ private const val SEC_COMPONENTS = 5
 private const val SEC_VARIABLES = 6
 private const val SEC_INPUT = 7
 private const val SEC_ADVANCED = 8
+private const val SEC_LSFG = 9
 
 private fun buildSections(isSteam: Boolean): List<Pair<Int, SidebarSection>> {
     val list = mutableListOf<Pair<Int, SidebarSection>>()
@@ -463,6 +475,7 @@ private fun buildSections(isSteam: Boolean): List<Pair<Int, SidebarSection>> {
     list += SEC_VARIABLES to SidebarSection(Icons.Outlined.Code, R.string.container_config_variables)
     list += SEC_WINE to SidebarSection(Icons.Outlined.Science, R.string.container_wine_title)
     list += SEC_COMPONENTS to SidebarSection(Icons.Outlined.Extension, R.string.settings_content_components)
+    list += SEC_LSFG to SidebarSection(Icons.Outlined.Tune, R.string.settings_lsfg_title)
     return list
 }
 
@@ -556,6 +569,7 @@ private fun SectionContent(
                 SEC_VARIABLES -> VariablesSection(state, callbacks)
                 SEC_INPUT -> InputSection(state)
                 SEC_ADVANCED -> AdvancedSection(state, callbacks)
+                SEC_LSFG -> LsfgSection(state)
             }
             Spacer(Modifier.height(SettingSectionGap))
         }
@@ -3712,5 +3726,72 @@ private fun SettingSlider(
                 inactiveTrackColor = TrackInactive
             )
         )
+    }
+}
+
+// ===================================================================
+// Section 8: LSFG (Lossless Scaling Frame Generation)
+// ===================================================================
+@Composable
+private fun LsfgSection(state: GameSettingsStateHolder) {
+    SettingSection(title = stringResource(R.string.settings_lsfg_title)) {
+        SettingGroup {
+            SettingSwitch(
+                label = stringResource(R.string.settings_lsfg_enable),
+                checked = state.lsfgEnabled.value,
+                onCheckedChange = { state.lsfgEnabled.value = it }
+            )
+        }
+
+        if (state.lsfgEnabled.value) {
+            Spacer(Modifier.height(12.dp))
+
+            SettingGroup {
+                SettingDropdown(
+                    label = stringResource(R.string.settings_lsfg_multiplier),
+                    entries = state.lsfgMultiplierEntries.value,
+                    selectedIndex = state.lsfgSelectedMultiplier.intValue,
+                    onSelected = { state.lsfgSelectedMultiplier.intValue = it },
+                    enabled = true
+                )
+
+                Spacer(Modifier.height(14.dp))
+
+                SettingSlider(
+                    label = stringResource(R.string.settings_lsfg_flow_scale),
+                    value = state.lsfgFlowScale.intValue,
+                    range = 25..100,
+                    onValueChange = { state.lsfgFlowScale.intValue = it.coerceIn(25, 100) }
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                SettingCheckbox(
+                    label = stringResource(R.string.settings_lsfg_performance_mode),
+                    checked = state.lsfgPerformanceMode.value,
+                    onCheckedChange = { state.lsfgPerformanceMode.value = it },
+                    enabled = true
+                )
+
+                Spacer(Modifier.height(4.dp))
+
+                SettingCheckbox(
+                    label = stringResource(R.string.settings_lsfg_hdr_mode),
+                    checked = state.lsfgHdrMode.value,
+                    onCheckedChange = { state.lsfgHdrMode.value = it },
+                    enabled = true
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                SettingDropdown(
+                    label = stringResource(R.string.settings_lsfg_present_mode),
+                    entries = state.lsfgPresentModeEntries.value,
+                    selectedIndex = state.lsfgSelectedPresentMode.intValue,
+                    onSelected = { state.lsfgSelectedPresentMode.intValue = it },
+                    enabled = true
+                )
+            }
+        }
     }
 }
