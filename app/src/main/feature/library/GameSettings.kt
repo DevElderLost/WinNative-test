@@ -3734,64 +3734,61 @@ private fun SettingSlider(
 // ===================================================================
 @Composable
 private fun LsfgSection(state: GameSettingsStateHolder) {
-    SettingSection(title = stringResource(R.string.settings_lsfg_title)) {
-        SettingGroup {
-            SettingSwitch(
-                label = stringResource(R.string.settings_lsfg_enable),
-                checked = state.lsfgEnabled.value,
-                onCheckedChange = { state.lsfgEnabled.value = it }
-            )
-        }
+    SubsectionLabel(stringResource(R.string.settings_lsfg_title))
+    Spacer(Modifier.height(8.dp))
 
-        if (state.lsfgEnabled.value) {
+    SettingGroup {
+        SettingCheckbox(
+            label = stringResource(R.string.settings_lsfg_enable),
+            checked = state.lsfgEnabled.value,
+            onCheckedChange = { state.lsfgEnabled.value = it }
+        )
+    }
+
+    if (state.lsfgEnabled.value) {
+        Spacer(Modifier.height(12.dp))
+
+        SettingGroup {
+            SettingDropdown(
+                label = stringResource(R.string.settings_lsfg_multiplier),
+                entries = state.lsfgMultiplierEntries.value,
+                selectedIndex = state.lsfgSelectedMultiplier.intValue,
+                onSelected = { state.lsfgSelectedMultiplier.intValue = it }
+            )
+
+            Spacer(Modifier.height(14.dp))
+
+            SettingSlider(
+                label = stringResource(R.string.settings_lsfg_flow_scale),
+                value = state.lsfgFlowScale.intValue,
+                range = 25..100,
+                onValueChange = { state.lsfgFlowScale.intValue = it.coerceIn(25, 100) }
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            SettingCheckbox(
+                label = stringResource(R.string.settings_lsfg_performance_mode),
+                checked = state.lsfgPerformanceMode.value,
+                onCheckedChange = { state.lsfgPerformanceMode.value = it }
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            SettingCheckbox(
+                label = stringResource(R.string.settings_lsfg_hdr_mode),
+                checked = state.lsfgHdrMode.value,
+                onCheckedChange = { state.lsfgHdrMode.value = it }
+            )
+
             Spacer(Modifier.height(12.dp))
 
-            SettingGroup {
-                SettingDropdown(
-                    label = stringResource(R.string.settings_lsfg_multiplier),
-                    entries = state.lsfgMultiplierEntries.value,
-                    selectedIndex = state.lsfgSelectedMultiplier.intValue,
-                    onSelected = { state.lsfgSelectedMultiplier.intValue = it },
-                    enabled = true
-                )
-
-                Spacer(Modifier.height(14.dp))
-
-                SettingSlider(
-                    label = stringResource(R.string.settings_lsfg_flow_scale),
-                    value = state.lsfgFlowScale.intValue,
-                    range = 25..100,
-                    onValueChange = { state.lsfgFlowScale.intValue = it.coerceIn(25, 100) }
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                SettingCheckbox(
-                    label = stringResource(R.string.settings_lsfg_performance_mode),
-                    checked = state.lsfgPerformanceMode.value,
-                    onCheckedChange = { state.lsfgPerformanceMode.value = it },
-                    enabled = true
-                )
-
-                Spacer(Modifier.height(4.dp))
-
-                SettingCheckbox(
-                    label = stringResource(R.string.settings_lsfg_hdr_mode),
-                    checked = state.lsfgHdrMode.value,
-                    onCheckedChange = { state.lsfgHdrMode.value = it },
-                    enabled = true
-                )
-
-                Spacer(Modifier.height(12.dp))
-
-                SettingDropdown(
-                    label = stringResource(R.string.settings_lsfg_present_mode),
-                    entries = state.lsfgPresentModeEntries.value,
-                    selectedIndex = state.lsfgSelectedPresentMode.intValue,
-                    onSelected = { state.lsfgSelectedPresentMode.intValue = it },
-                    enabled = true
-                )
-            }
+            SettingDropdown(
+                label = stringResource(R.string.settings_lsfg_present_mode),
+                entries = state.lsfgPresentModeEntries.value,
+                selectedIndex = state.lsfgSelectedPresentMode.intValue,
+                onSelected = { state.lsfgSelectedPresentMode.intValue = it }
+            )
         }
     }
 }
