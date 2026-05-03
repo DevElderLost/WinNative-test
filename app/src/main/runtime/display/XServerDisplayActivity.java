@@ -674,6 +674,10 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     eventFile.delete();
                 }
             }
+            // Selalu buat event0 sebagai fallback minimum
+            // agar libfakeinput.so punya file untuk di-hook
+            // bahkan sebelum shortcut/numControllers di-load
+            try { new File(devInputDir, "event0").createNewFile(); } catch (Exception ignored) {}
         }
         winHandler.setFakeInputPath(devInputDir.getAbsolutePath());
 
@@ -816,7 +820,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         numControllers = Math.max(1, Math.min(numControllers, 4));
         for (int i = 0; i < numControllers; i++) {
             try {
-                new File(devInputDir, "event" + i).createNewFile();
+                File ef = new File(devInputDir, "event" + i);
+                if (!ef.exists()) ef.createNewFile();
             } catch (Exception e) {
             }
         }
@@ -3722,7 +3727,7 @@ case MotionEvent.ACTION_HOVER_MOVE:
 
 // Versi runtime — naikkan jika ada update liblsfg-vk-layer.so di APK assets
 // agar .so di-copy ulang ke container (mengikuti pola GameNative RUNTIME_VERSION)
-private static final int LSFG_RUNTIME_VERSION = 2;
+private static final int LSFG_RUNTIME_VERSION = 1;
 
 private void prepareLsfgRuntime() {
     // Hanya install .so dan manifest ke per-container path.
