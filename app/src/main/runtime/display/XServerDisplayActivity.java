@@ -3710,7 +3710,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
 
     // =================== LSFG ===================
     // Versi runtime — naikkan jika ada update liblsfg-vk-layer.so di APK assets
-    private static final int LSFG_RUNTIME_VERSION = 1;
+    private static final int LSFG_RUNTIME_VERSION = 2;
 
     private void prepareLsfgRuntime() {
         if (shortcut == null || imageFs == null) return;
