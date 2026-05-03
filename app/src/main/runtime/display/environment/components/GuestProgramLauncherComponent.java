@@ -741,7 +741,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     Log.d("GuestLauncher", "nativeLibDir: " + nativeLibDir);
     Log.d("GuestLauncher", "fakeinputSrc exists: " + fakeinputSrc.exists());
     Log.d("GuestLauncher", "fakeinputDest: " + fakeinputDest.getAbsolutePath());
-    if (!fakeinputDest.exists()) {
+    if (!fakeinputDest.exists() || fakeinputDest.length() == 0) {
       try {
         if (fakeinputSrc.exists()) {
           FileUtils.copy(fakeinputSrc, fakeinputDest);
@@ -820,16 +820,18 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     Log.d("GuestLauncher", "Final LD_PRELOAD: " + ld_preload);
     envVars.put("LD_PRELOAD", ld_preload);
 
-    // === LSFG frame generation env vars ===
-    // Harus di-set di sini (execGuestProgram), bukan di XServerDisplayActivity,
-    // karena env vars di XServerDisplayActivity tidak sampai ke proses Wine.
-    // prepareLsfgRuntime() di XServerDisplayActivity sudah menyiapkan .so dan manifest.
-    applyLsfgEnvVars(envVars, imageFs);
-    // === end LSFG ===
-
     // Preserve the launcher-owned preload/input paths while restoring the
     // full env built upstream in XServerDisplayActivity (driver, DXVK, Vulkan, etc).
+    // FAKE_EVDEV_DIR harus di-protect di sini agar controller virtual tidak hilang.
     mergeExternalEnvVars(envVars, envVars.get("LD_PRELOAD"), envVars.get("FAKE_EVDEV_DIR"));
+
+    // === LSFG frame generation env vars ===
+    // Dipanggil SETELAH mergeExternalEnvVars agar:
+    // 1. VK_LAYER_PATH LSFG (per-container) tidak tertimpa oleh VK_LAYER_PATH global
+    //    dari XServerDisplayActivity via mergeExternalEnvVars/putAll.
+    // 2. FAKE_EVDEV_DIR sudah di-protect sebelum ini sehingga controller tetap bekerja.
+    applyLsfgEnvVars(envVars, imageFs);
+    // === end LSFG ===
     FEXCorePresetManager.normalizeSmcChecksEnvVars(envVars, this.envVars);
 
     String emulator = container.getEmulator();
@@ -994,13 +996,15 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     }
     com.winlator.cmod.shared.io.FileUtils.writeString(confToml, toml.toString());
 
-    // Set VK_LAYER_PATH — per-container dir di-append ke yang sudah ada
+    // Set VK_LAYER_PATH — per-container dir di-append ke nilai yang sudah ada
+    // (nilai global dari XServerDisplayActivity sudah ada setelah mergeExternalEnvVars)
     String existingLayerPath = envVars.get("VK_LAYER_PATH");
     String containerLayerPath = layerDir.getAbsolutePath();
     if (existingLayerPath == null || existingLayerPath.isEmpty()) {
       envVars.put("VK_LAYER_PATH", containerLayerPath);
     } else if (!existingLayerPath.contains(containerLayerPath)) {
-      envVars.put("VK_LAYER_PATH", existingLayerPath + ":" + containerLayerPath);
+      // Per-container path diletakkan di DEPAN agar diprioritaskan
+      envVars.put("VK_LAYER_PATH", containerLayerPath + ":" + existingLayerPath);
     }
 
     // Set semua LSFG env vars
