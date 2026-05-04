@@ -3762,7 +3762,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     }
 
     // =================== LSFG ===================
-    private static final int LSFG_RUNTIME_VERSION = 1;
+    private static final int LSFG_RUNTIME_VERSION = 2;
 
     private void prepareLsfgRuntime() {
         if (imageFs == null) return;
