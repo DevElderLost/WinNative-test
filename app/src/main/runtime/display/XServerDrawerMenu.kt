@@ -2310,7 +2310,7 @@ private fun XServerLsfgSettingsExpanded(
                     Switch(
                         checked = state.lsfgPerformanceMode,
                         onCheckedChange = { listener.onLsfgPerformanceModeChanged(it) },
-                        colors = outlinedSwitchColors(),
+                        colors = outlinedSwitchColors(WinNativeAccent, WinNativeTextSecondary),
                     )
                 }
             }
@@ -2331,7 +2331,7 @@ private fun XServerLsfgSettingsExpanded(
                     Switch(
                         checked = state.lsfgHdrMode,
                         onCheckedChange = { listener.onLsfgHdrModeChanged(it) },
-                        colors = outlinedSwitchColors(),
+                        colors = outlinedSwitchColors(WinNativeAccent, WinNativeTextSecondary),
                     )
                 }
             }
