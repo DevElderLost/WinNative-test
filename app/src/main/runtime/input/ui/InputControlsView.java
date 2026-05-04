@@ -443,7 +443,9 @@ public class InputControlsView extends View {
   }
 
   private void createMouseMoveTimer() {
+    if (xServer == null) return;
     WinHandler winHandler = xServer.getWinHandler();
+    if (winHandler == null) return;
     if (mouseMoveTimer == null && profile != null) {
       final float cursorSpeed = profile.getCursorSpeed();
       mouseMoveTimer = new Timer();
@@ -665,6 +667,10 @@ public class InputControlsView extends View {
             if (selectedElement != null) {
               selectedElement.setX((int) Mathf.roundTo(event.getX() - offsetX, snappingSize));
               selectedElement.setY((int) Mathf.roundTo(event.getY() - offsetY, snappingSize));
+              if (selectedElement.getType() == ControlElement.Type.STICK) {
+                android.graphics.Rect bb = selectedElement.getBoundingBox();
+                selectedElement.setCurrentPosition(bb.centerX(), bb.centerY());
+              }
               invalidate();
             }
             break;
@@ -939,6 +945,7 @@ public class InputControlsView extends View {
             isActionDown ? (offset != 0 ? offset : (binding == Binding.MOUSE_MOVE_UP ? -1 : 1)) : 0;
         if (isActionDown) createMouseMoveTimer();
       } else {
+        if (xServer == null) return;
         Pointer.Button pointerButton = binding.getPointerButton();
         if (isActionDown) {
           if (pointerButton != null) {
@@ -949,8 +956,9 @@ public class InputControlsView extends View {
                       : (pointerButton == Pointer.Button.BUTTON_SCROLL_DOWN
                           ? -MOUSE_WHEEL_DELTA
                           : 0);
-              winHandler.mouseEvent(
-                  MouseEventFlags.getFlagFor(pointerButton, true), 0, 0, wheelDelta);
+              if (winHandler != null)
+                winHandler.mouseEvent(
+                    MouseEventFlags.getFlagFor(pointerButton, true), 0, 0, wheelDelta);
             } else {
               xServer.injectPointerButtonPress(pointerButton);
             }
@@ -958,7 +966,8 @@ public class InputControlsView extends View {
         } else {
           if (pointerButton != null) {
             if (xServer.isRelativeMouseMovement()) {
-              winHandler.mouseEvent(MouseEventFlags.getFlagFor(pointerButton, false), 0, 0, 0);
+              if (winHandler != null)
+                winHandler.mouseEvent(MouseEventFlags.getFlagFor(pointerButton, false), 0, 0, 0);
             } else {
               xServer.injectPointerButtonRelease(pointerButton);
             }
