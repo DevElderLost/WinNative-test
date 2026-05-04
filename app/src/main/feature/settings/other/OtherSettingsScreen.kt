@@ -114,6 +114,8 @@ data class OtherSettingsState(
     val openInBrowser: Boolean = false,
     val shareClipboard: Boolean = false,
     val imagefsInstallProgress: Int? = null,
+    // LSFG — path DLL global yang diimport dari OtherSettings
+    val lsfgDllPath: String = "",
 )
 
 @Composable
@@ -156,6 +158,8 @@ fun OtherSettingsScreen(
     onShareClipboardChanged: (Boolean) -> Unit,
     onRunSetupWizard: () -> Unit,
     onReinstallImagefs: () -> Unit,
+    onImportLsfgDll: () -> Unit = {},
+    onClearLsfgDll: () -> Unit = {},
 ) {
     var showReinstallDialog by remember { mutableStateOf(false) }
     val layoutDirection = LocalLayoutDirection.current
@@ -321,6 +325,21 @@ fun OtherSettingsScreen(
                 icon = Icons.Outlined.ContentCopy,
                 checked = state.shareClipboard,
                 onCheckedChange = onShareClipboardChanged,
+            )
+        }
+
+        item(key = "lsfg_section") {
+            SectionLabel(
+                stringResource(R.string.settings_lsfg_title),
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+
+        item(key = "lsfg_dll_card") {
+            LsfgDllCard(
+                dllPath = state.lsfgDllPath,
+                onImport = onImportLsfgDll,
+                onClear = onClearLsfgDll,
             )
         }
 
@@ -1062,6 +1081,81 @@ private fun ImagefsInstallProgressDialog(percent: Int) {
                     strokeCap = ProgressIndicatorDefaults.LinearStrokeCap,
                     gapSize = 0.dp,
                     drawStopIndicator = {},
+                )
+            }
+        }
+    }
+}
+
+// LSFG DLL import card — global, berlaku untuk semua game
+@Composable
+private fun LsfgDllCard(
+    dllPath: String,
+    onImport: () -> Unit,
+    onClear: () -> Unit,
+) {
+    val hasFile = dllPath.isNotBlank()
+    val fileName = dllPath.substringAfterLast('/').substringAfterLast('\\')
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(CardDark)
+            .border(1.dp, CardBorder, RoundedCornerShape(12.dp)),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(IconBoxBg),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Speed,
+                    contentDescription = null,
+                    tint = Accent,
+                    modifier = Modifier.size(17.dp),
+                )
+            }
+            Spacer(Modifier.width(13.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.settings_lsfg_lossless_dll),
+                    color = TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = if (hasFile) fileName
+                           else stringResource(R.string.settings_lsfg_no_dll_imported),
+                    color = if (hasFile) Accent else TextSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            SmallActionButton(
+                label = stringResource(
+                    if (hasFile) R.string.common_ui_change
+                    else R.string.common_ui_import
+                ),
+                textColor = Accent,
+                onClick = onImport,
+            )
+            if (hasFile) {
+                Spacer(Modifier.width(6.dp))
+                SmallActionButton(
+                    label = stringResource(R.string.common_ui_remove),
+                    textColor = Color(0xFFFF5C5C),
+                    onClick = onClear,
                 )
             }
         }
