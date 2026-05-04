@@ -372,6 +372,17 @@ class GameSettingsStateHolder {
 
     // Loading state
     val isLoaded = mutableStateOf(false)
+
+    // LSFG
+    val lsfgEnabled = mutableStateOf(false)
+    val lsfgDllPath = mutableStateOf("")
+    val lsfgMultiplierEntries = mutableStateOf(listOf("2x", "3x", "4x"))
+    val lsfgSelectedMultiplier = mutableIntStateOf(0)
+    val lsfgFlowScale = mutableIntStateOf(80)
+    val lsfgPerformanceMode = mutableStateOf(true)
+    val lsfgHdrMode = mutableStateOf(false)
+    val lsfgPresentModeEntries = mutableStateOf(listOf("FIFO", "Mailbox", "Immediate"))
+    val lsfgSelectedPresentMode = mutableIntStateOf(0)
 }
 
 // ---------------------------------------------------------------------------
@@ -404,6 +415,8 @@ interface GameSettingsCallbacks {
     fun onRemoveDrive(index: Int) {}
     fun onPickDrivePath(index: Int) {}
     fun onPickWallpaper() {}
+    fun onImportLsfgDll() {}
+    fun onClearLsfgDll() {}
 }
 
 // ---------------------------------------------------------------------------
@@ -452,12 +465,14 @@ private const val SEC_COMPONENTS = 5
 private const val SEC_VARIABLES = 6
 private const val SEC_INPUT = 7
 private const val SEC_ADVANCED = 8
+private const val SEC_LSFG = 9
 
-private fun buildSections(isSteam: Boolean): List<Pair<Int, SidebarSection>> {
+private fun buildSections(isSteam: Boolean, isContainer: Boolean): List<Pair<Int, SidebarSection>> {
     val list = mutableListOf<Pair<Int, SidebarSection>>()
     list += SEC_GENERAL to SidebarSection(Icons.Outlined.Tune, R.string.settings_general_title)
     if (isSteam) list += SEC_STEAM to SidebarSection(Icons.Outlined.Science, R.string.steam_section_title)
     list += SEC_DISPLAY to SidebarSection(Icons.Outlined.Monitor, R.string.common_ui_graphics)
+    if (!isContainer) list += SEC_LSFG to SidebarSection(Icons.Outlined.Extension, R.string.settings_lsfg_title)
     list += SEC_ADVANCED to SidebarSection(Icons.Outlined.Settings, R.string.common_ui_advanced)
     list += SEC_INPUT to SidebarSection(Icons.Outlined.SportsEsports, R.string.common_ui_input_controls)
     list += SEC_VARIABLES to SidebarSection(Icons.Outlined.Code, R.string.container_config_variables)
@@ -475,7 +490,8 @@ fun GameSettingsContent(
     callbacks: GameSettingsCallbacks
 ) {
     val isSteam by state.isSteamGame
-    val sections = remember(isSteam) { buildSections(isSteam) }
+    val isContainer by state.isContainerEditMode
+    val sections = remember(isSteam, isContainer) { buildSections(isSteam, isContainer) }
     val selectedIdx by state.currentSection
     val currentSectionId = sections.getOrNull(selectedIdx)?.first ?: SEC_GENERAL
     val saveEnabled by state.isLoaded
@@ -556,6 +572,7 @@ private fun SectionContent(
                 SEC_VARIABLES -> VariablesSection(state, callbacks)
                 SEC_INPUT -> InputSection(state)
                 SEC_ADVANCED -> AdvancedSection(state, callbacks)
+                SEC_LSFG -> LsfgSection(state, callbacks)
             }
             Spacer(Modifier.height(SettingSectionGap))
         }
@@ -3711,6 +3728,166 @@ private fun SettingSlider(
                 activeTrackColor = AccentBlue,
                 inactiveTrackColor = TrackInactive
             )
+        )
+    }
+}
+
+// ===================================================================
+// Section: LSFG (Lossless Scaling Frame Generation)
+// ===================================================================
+@Composable
+private fun LsfgSection(
+    state: GameSettingsStateHolder,
+    callbacks: GameSettingsCallbacks
+) {
+    SettingGroup {
+        SettingCheckbox(
+            label = stringResource(R.string.settings_lsfg_enable),
+            checked = state.lsfgEnabled.value,
+            onCheckedChange = { state.lsfgEnabled.value = it }
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        LsfgDllImportRow(
+            path = state.lsfgDllPath.value,
+            onImport = callbacks::onImportLsfgDll,
+            onClear = callbacks::onClearLsfgDll
+        )
+    }
+
+    Spacer(Modifier.height(16.dp))
+
+    SubsectionLabel(stringResource(R.string.settings_lsfg_frame_generation))
+    Spacer(Modifier.height(8.dp))
+    SettingGroup {
+        SettingDropdown(
+            label = stringResource(R.string.settings_lsfg_multiplier),
+            entries = state.lsfgMultiplierEntries.value,
+            selectedIndex = state.lsfgSelectedMultiplier.intValue,
+            onSelected = { state.lsfgSelectedMultiplier.intValue = it },
+            enabled = state.lsfgEnabled.value
+        )
+
+        Spacer(Modifier.height(14.dp))
+
+        SettingSlider(
+            label = stringResource(R.string.settings_lsfg_flow_scale),
+            value = state.lsfgFlowScale.intValue,
+            range = 25..100,
+            onValueChange = { state.lsfgFlowScale.intValue = it.coerceIn(25, 100) }
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        SettingCheckbox(
+            label = stringResource(R.string.settings_lsfg_performance_mode),
+            checked = state.lsfgPerformanceMode.value,
+            onCheckedChange = { state.lsfgPerformanceMode.value = it },
+            enabled = state.lsfgEnabled.value
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        SettingCheckbox(
+            label = stringResource(R.string.settings_lsfg_hdr_mode),
+            checked = state.lsfgHdrMode.value,
+            onCheckedChange = { state.lsfgHdrMode.value = it },
+            enabled = state.lsfgEnabled.value
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        SettingDropdown(
+            label = stringResource(R.string.settings_lsfg_present_mode),
+            entries = state.lsfgPresentModeEntries.value,
+            selectedIndex = state.lsfgSelectedPresentMode.intValue,
+            onSelected = { state.lsfgSelectedPresentMode.intValue = it },
+            enabled = state.lsfgEnabled.value
+        )
+    }
+}
+
+@Composable
+private fun LsfgDllImportRow(
+    path: String,
+    onImport: () -> Unit,
+    onClear: () -> Unit
+) {
+    val fileName = path.substringAfterLast('/').substringAfterLast('\\')
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(InputSurface)
+            .border(1.dp, InputBorder, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.settings_lsfg_lossless_dll),
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    text = if (path.isBlank()) {
+                        stringResource(R.string.settings_lsfg_no_dll_imported)
+                    } else {
+                        fileName
+                    },
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            LsfgActionButton(
+                text = stringResource(
+                    if (path.isBlank()) R.string.common_ui_import
+                    else R.string.common_ui_change
+                ),
+                tint = AccentBlue,
+                onClick = onImport
+            )
+
+            if (path.isNotBlank()) {
+                LsfgActionButton(
+                    text = stringResource(R.string.common_ui_remove),
+                    tint = DangerRed,
+                    onClick = onClear
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LsfgActionButton(
+    text: String,
+    tint: Color,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(9.dp))
+            .background(tint.copy(alpha = 0.08f))
+            .border(1.dp, tint.copy(alpha = 0.2f), RoundedCornerShape(9.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = text,
+            color = tint,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium
         )
     }
 }
