@@ -946,6 +946,8 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
 
   // =================== LSFG ===================
   private void applyLsfgEnvVars(EnvVars envVars, ImageFs imageFs) {
+    Context context = environment.getContext();
+    
     if (imageFs == null) {
       envVars.put("DISABLE_LSFG", "1");
       return;
