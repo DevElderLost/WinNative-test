@@ -3091,24 +3091,28 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     @Override
                     public void onLsfgMultiplierChanged(int multiplier) {
                         preferences.edit().putInt("lsfg_multiplier", multiplier).apply();
+                        updateLsfgConfig();
                         renderDrawerMenu();
                     }
 
                     @Override
                     public void onLsfgFlowScaleChanged(float scale) {
                         preferences.edit().putFloat("lsfg_flow_scale", scale).apply();
+                        updateLsfgConfig();
                         renderDrawerMenu();
                     }
 
                     @Override
                     public void onLsfgPerformanceModeChanged(boolean enabled) {
                         preferences.edit().putBoolean("lsfg_performance_mode", enabled).apply();
+                        updateLsfgConfig();
                         renderDrawerMenu();
                     }
 
                     @Override
                     public void onLsfgHdrModeChanged(boolean enabled) {
                         preferences.edit().putBoolean("lsfg_hdr_mode", enabled).apply();
+                        updateLsfgConfig();
                         renderDrawerMenu();
                     }
 
@@ -3117,6 +3121,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                         String[] modes = {"fifo", "mailbox", "immediate"};
                         String mode = (index >= 0 && index < modes.length) ? modes[index] : "fifo";
                         preferences.edit().putString("lsfg_present_mode", mode).apply();
+                        updateLsfgConfig();
                         renderDrawerMenu();
                     }
                 };
@@ -6304,6 +6309,63 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             case "immediate": return 2;
             default:          return 0; // fifo
         }
+    }
+
+    /**
+     * Tulis ulang conf.toml saat setting LSFG diubah dari DrawerMenu agar
+     * hot-reload bekerja — lsfg-vk memantau file conf.toml secara real-time.
+     */
+    private void updateLsfgConfig() {
+        if (imageFs == null) return;
+        String containerHome = imageFs.getRootDir().getPath() + "/home/xuser";
+        File confToml = new File(containerHome + "/.config/lsfg-vk/conf.toml");
+        if (!confToml.exists()) return; // game belum berjalan atau LSFG belum init
+
+        String dllPath = preferences.getString("lsfg_dll_path", "");
+        if (dllPath == null || dllPath.isEmpty()) return;
+
+        int multiplier = Math.max(2, Math.min(4, preferences.getInt("lsfg_multiplier", 2)));
+        float flowScaleF = Math.max(0.25f, Math.min(1.0f, preferences.getFloat("lsfg_flow_scale", 0.80f)));
+        String flowScale = String.format(java.util.Locale.US, "%.2f", flowScaleF);
+        boolean perfMode = preferences.getBoolean("lsfg_performance_mode", true);
+        boolean hdrMode  = preferences.getBoolean("lsfg_hdr_mode", false);
+        String presentMode;
+        switch (preferences.getString("lsfg_present_mode", "fifo").toLowerCase(java.util.Locale.ROOT)) {
+            case "mailbox":   presentMode = "mailbox";   break;
+            case "immediate": presentMode = "immediate"; break;
+            default:          presentMode = "fifo";      break;
+        }
+
+        // Resolve process name dari guestProgramLauncherComponent
+        String processName = "";
+        if (guestProgramLauncherComponent != null) {
+            String exe = guestProgramLauncherComponent.getGuestExecutable();
+            if (exe != null && !exe.isEmpty()) {
+                String[] parts = exe.split("\\s+");
+                for (int i = parts.length - 1; i >= 0; i--) {
+                    if (parts[i].toLowerCase(java.util.Locale.ROOT).endsWith(".exe")) {
+                        processName = new File(parts[i].replace("\\", "/")).getName();
+                        break;
+                    }
+                }
+            }
+        }
+
+        StringBuilder toml = new StringBuilder();
+        toml.append("version = 1\n[global]\n");
+        toml.append("dll_path = \"").append(dllPath.replace("\\", "\\\\")).append("\"\n\n");
+        if (!processName.isEmpty()) {
+            toml.append("[[game]]\n");
+            toml.append("exe = \"").append(processName).append("\"\n");
+            toml.append("multiplier = ").append(multiplier).append("\n");
+            toml.append("flow_scale = ").append(flowScale).append("\n");
+            toml.append("performance_mode = ").append(perfMode ? "true" : "false").append("\n");
+            toml.append("hdr_mode = ").append(hdrMode ? "true" : "false").append("\n");
+            toml.append("present_mode = \"").append(presentMode).append("\"\n");
+        }
+        com.winlator.cmod.shared.io.FileUtils.writeString(confToml, toml.toString());
+        Log.d("XServerDisplayActivity", "LSFG config updated: multiplier=" + multiplier
+                + " flowScale=" + flowScale + " perfMode=" + perfMode);
     }
 
     private void normalizeSyncEnvVars(com.winlator.cmod.runtime.wine.EnvVars envVars) {
