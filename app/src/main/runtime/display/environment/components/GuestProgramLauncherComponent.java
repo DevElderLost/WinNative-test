@@ -946,17 +946,12 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
 
   // =================== LSFG ===================
   private void applyLsfgEnvVars(EnvVars envVars, ImageFs imageFs) {
-    if (imageFs == null) {
+    if (shortcut == null || imageFs == null) {
       envVars.put("DISABLE_LSFG", "1");
       return;
     }
 
-    // Baca semua settings LSFG dari SharedPreferences global
-    // (disimpan oleh OtherSettingsFragment dan XServerDrawerMenu)
-    android.content.SharedPreferences prefs =
-        androidx.preference.PreferenceManager.getDefaultSharedPreferences(context);
-
-    boolean enabled = prefs.getBoolean("lsfg_enabled", false);
+    boolean enabled = "1".equals(shortcut.getExtra("lsfgEnabled", "0"));
     File rootDir = imageFs.getRootDir();
     String containerHome = rootDir.getPath() + "/home/xuser";
     File layerDir    = new File(containerHome + "/.local/share/vulkan/implicit_layer.d");
@@ -974,23 +969,18 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
       return;
     }
 
-    // DLL path global dari OtherSettingsFragment
-    String dllPath = prefs.getString("lsfg_dll_path", "");
-    if (dllPath == null || dllPath.isEmpty() || !new java.io.File(dllPath).isFile()) {
+    String dllPath = shortcut.getExtra("lsfgDllPath", "");
+    if (dllPath.isEmpty() || !new java.io.File(dllPath).isFile()) {
       envVars.put("DISABLE_LSFG", "1");
       Log.w("GuestProgramLauncherComponent", "LSFG: Lossless.dll not found: " + dllPath);
       return;
     }
 
-    // Settings dari DrawerMenu (global, bukan per-shortcut)
-    int multiplier = prefs.getInt("lsfg_multiplier", 2);
-    multiplier = Math.max(2, Math.min(4, multiplier));
-    String flowScale = String.format(java.util.Locale.US, "%.2f",
-        Math.max(0.25f, Math.min(1.0f, prefs.getFloat("lsfg_flow_scale", 0.80f))));
-    boolean perfMode = prefs.getBoolean("lsfg_performance_mode", true);
-    boolean hdrMode  = prefs.getBoolean("lsfg_hdr_mode", false);
-    String presentMode = normalizeLsfgPresentMode(
-        prefs.getString("lsfg_present_mode", "fifo"));
+    int multiplier = Integer.parseInt(clampLsfgInt(shortcut.getExtra("lsfgMultiplier", "2"), 2, 4));
+    String flowScale = clampLsfgFloat(shortcut.getExtra("lsfgFlowScale", "0.80"), 0.25f, 1.0f);
+    boolean perfMode = "1".equals(shortcut.getExtra("lsfgPerformanceMode", "1"));
+    boolean hdrMode  = "1".equals(shortcut.getExtra("lsfgHdrMode", "0"));
+    String presentMode = normalizeLsfgPresentMode(shortcut.getExtra("lsfgPresentMode", "fifo"));
 
     // Resolve process name dari guestExecutable
     String processName = "";
@@ -1050,8 +1040,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
 
     Log.d("GuestProgramLauncherComponent", "LSFG armed:"
         + " process='" + processName + "' dll='" + dllPath + "'"
-        + " multiplier=" + multiplier + " flowScale=" + flowScale
-        + " perfMode=" + perfMode + " presentMode=" + presentMode);
+        + " multiplier=" + multiplier + " flowScale=" + flowScale);
   }
 
   private static String clampLsfgInt(String value, int min, int max) {
