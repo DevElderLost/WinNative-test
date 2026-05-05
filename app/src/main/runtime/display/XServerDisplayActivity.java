@@ -3083,12 +3083,6 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
 
                     // LSFG callbacks — simpan ke SharedPreferences global
                     @Override
-                    public void onLsfgEnabledChanged(boolean enabled) {
-                        preferences.edit().putBoolean("lsfg_enabled", enabled).apply();
-                        renderDrawerMenu();
-                    }
-
-                    @Override
                     public void onLsfgMultiplierChanged(int multiplier) {
                         preferences.edit().putInt("lsfg_multiplier", multiplier).apply();
                         updateLsfgConfig();

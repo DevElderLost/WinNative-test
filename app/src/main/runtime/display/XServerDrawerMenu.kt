@@ -53,8 +53,8 @@ import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.ZoomIn
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -235,7 +235,6 @@ interface XServerDrawerActionListener {
     fun onColorProfileSelected(profile: Int)
 
     // LSFG
-    fun onLsfgEnabledChanged(enabled: Boolean)
     fun onLsfgMultiplierChanged(multiplier: Int)
     fun onLsfgFlowScaleChanged(scale: Float)
     fun onLsfgPerformanceModeChanged(enabled: Boolean)
@@ -2076,115 +2075,103 @@ private fun LsfgInlineSettings(
     state: XServerDrawerState,
     listener: XServerDrawerActionListener,
 ) {
+    // Hanya tampil jika LSFG aktif dan DLL sudah diimport
+    if (!state.lsfgEnabled || state.lsfgDllPath.isBlank()) return
+
     val multiplierOptions = listOf("2x", "3x", "4x")
     val presentModeOptions = listOf("FIFO", "Mailbox", "Immediate")
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Header row dengan toggle enable/disable
+        // Header — text saja, tanpa toggle
         Row(
-            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Tune,
-                    contentDescription = null,
-                    tint = if (state.lsfgEnabled) WinNativeAccent else WinNativeTextSecondary,
-                    modifier = Modifier.size(15.dp),
-                )
-                Text(
-                    text = "Lossless Scaling FG",
-                    color = WinNativeTextPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            DrawerStatusPill(
-                text = if (state.lsfgEnabled) stringResource(R.string.common_ui_on)
-                       else stringResource(R.string.common_ui_off),
-                active = state.lsfgEnabled,
-                interactionSource = remember { MutableInteractionSource() },
-                onClick = { listener.onLsfgEnabledChanged(!state.lsfgEnabled) },
+            Icon(
+                imageVector = Icons.Outlined.Tune,
+                contentDescription = null,
+                tint = WinNativeAccent,
+                modifier = Modifier.size(15.dp),
+            )
+            Text(
+                text = "Lossless Scaling FG",
+                color = WinNativeTextPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
             )
         }
 
-        if (state.lsfgEnabled) {
-            // Multiplier chips
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = stringResource(R.string.settings_lsfg_multiplier),
-                    color = WinNativeTextSecondary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 0.3.sp,
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    multiplierOptions.forEachIndexed { idx, label ->
-                        val mult = idx + 2
-                        HUDToggleChip(
-                            label = label,
-                            checked = state.lsfgMultiplier == mult,
-                            onClick = { listener.onLsfgMultiplierChanged(mult) },
-                        )
-                    }
+        // Multiplier chips
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = stringResource(R.string.settings_lsfg_multiplier),
+                color = WinNativeTextSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 0.3.sp,
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                multiplierOptions.forEachIndexed { idx, label ->
+                    val mult = idx + 2
+                    HUDToggleChip(
+                        label = label,
+                        checked = state.lsfgMultiplier == mult,
+                        onClick = { listener.onLsfgMultiplierChanged(mult) },
+                    )
                 }
             }
+        }
 
-            // Flow Scale slider
-            DrawerSliderRow(
-                label = stringResource(R.string.settings_lsfg_flow_scale),
-                valueText = "${(state.lsfgFlowScale * 100).toInt()}%",
-                value = state.lsfgFlowScale,
-                valueRange = 0.25f..1.0f,
-                steps = 14,
-                onValueChange = { listener.onLsfgFlowScaleChanged(it) },
+        // Flow Scale slider
+        DrawerSliderRow(
+            label = stringResource(R.string.settings_lsfg_flow_scale),
+            valueText = "${(state.lsfgFlowScale * 100).toInt()}%",
+            value = state.lsfgFlowScale,
+            valueRange = 0.25f..1.0f,
+            steps = 14,
+            onValueChange = { listener.onLsfgFlowScaleChanged(it) },
+        )
+
+        // Performance Mode
+        DrawerBooleanRow(
+            title = stringResource(R.string.settings_lsfg_performance_mode),
+            checked = state.lsfgPerformanceMode,
+            onCheckedChange = { listener.onLsfgPerformanceModeChanged(it) },
+        )
+
+        // HDR Mode
+        DrawerBooleanRow(
+            title = stringResource(R.string.settings_lsfg_hdr_mode),
+            checked = state.lsfgHdrMode,
+            onCheckedChange = { listener.onLsfgHdrModeChanged(it) },
+        )
+
+        // Present Mode chips
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = stringResource(R.string.settings_lsfg_present_mode),
+                color = WinNativeTextSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 0.3.sp,
             )
-
-            // Performance Mode
-            DrawerBooleanRow(
-                title = stringResource(R.string.settings_lsfg_performance_mode),
-                checked = state.lsfgPerformanceMode,
-                onCheckedChange = { listener.onLsfgPerformanceModeChanged(it) },
-            )
-
-            // HDR Mode
-            DrawerBooleanRow(
-                title = stringResource(R.string.settings_lsfg_hdr_mode),
-                checked = state.lsfgHdrMode,
-                onCheckedChange = { listener.onLsfgHdrModeChanged(it) },
-            )
-
-            // Present Mode chips
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = stringResource(R.string.settings_lsfg_present_mode),
-                    color = WinNativeTextSecondary,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    letterSpacing = 0.3.sp,
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    presentModeOptions.forEachIndexed { idx, label ->
-                        HUDToggleChip(
-                            label = label,
-                            checked = state.lsfgPresentModeIndex == idx,
-                            onClick = { listener.onLsfgPresentModeSelected(idx) },
-                        )
-                    }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                presentModeOptions.forEachIndexed { idx, label ->
+                    HUDToggleChip(
+                        label = label,
+                        checked = state.lsfgPresentModeIndex == idx,
+                        onClick = { listener.onLsfgPresentModeSelected(idx) },
+                    )
                 }
             }
         }
