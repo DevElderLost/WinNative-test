@@ -114,7 +114,8 @@ data class OtherSettingsState(
     val openInBrowser: Boolean = false,
     val shareClipboard: Boolean = false,
     val imagefsInstallProgress: Int? = null,
-    // LSFG — path DLL global yang diimport dari OtherSettings
+    // LSFG
+    val lsfgEnabled: Boolean = false,
     val lsfgDllPath: String = "",
 )
 
@@ -160,6 +161,7 @@ fun OtherSettingsScreen(
     onReinstallImagefs: () -> Unit,
     onImportLsfgDll: () -> Unit = {},
     onClearLsfgDll: () -> Unit = {},
+    onLsfgEnabledChanged: (Boolean) -> Unit = {},
 ) {
     var showReinstallDialog by remember { mutableStateOf(false) }
     val layoutDirection = LocalLayoutDirection.current
@@ -335,9 +337,11 @@ fun OtherSettingsScreen(
             )
         }
 
-        item(key = "lsfg_dll_card") {
-            LsfgDllCard(
+        item(key = "lsfg_toggle_card") {
+            LsfgToggleCard(
+                enabled = state.lsfgEnabled,
                 dllPath = state.lsfgDllPath,
+                onEnabledChanged = onLsfgEnabledChanged,
                 onImport = onImportLsfgDll,
                 onClear = onClearLsfgDll,
             )
@@ -1087,23 +1091,27 @@ private fun ImagefsInstallProgressDialog(percent: Int) {
     }
 }
 
-// LSFG DLL import card — global, berlaku untuk semua game
+// LSFG toggle card — switch enable/disable + expand import DLL
 @Composable
-private fun LsfgDllCard(
+private fun LsfgToggleCard(
+    enabled: Boolean,
     dllPath: String,
+    onEnabledChanged: (Boolean) -> Unit,
     onImport: () -> Unit,
     onClear: () -> Unit,
 ) {
     val hasFile = dllPath.isNotBlank()
-    val fileName = dllPath.substringAfterLast('/').substringAfterLast('\\')
+    // Selalu tampilkan "Lossless.dll" — bukan full path
+    val displayName = "Lossless.dll"
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(CardDark)
             .border(1.dp, CardBorder, RoundedCornerShape(12.dp)),
     ) {
+        // Row utama — toggle switch
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1114,49 +1122,93 @@ private fun LsfgDllCard(
                 modifier = Modifier
                     .size(34.dp)
                     .clip(RoundedCornerShape(9.dp))
-                    .background(IconBoxBg),
+                    .background(if (enabled) Accent.copy(alpha = 0.15f) else IconBoxBg),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Speed,
                     contentDescription = null,
-                    tint = Accent,
+                    tint = if (enabled) Accent else TextSecondary,
                     modifier = Modifier.size(17.dp),
                 )
             }
             Spacer(Modifier.width(13.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = stringResource(R.string.settings_lsfg_lossless_dll),
+                    text = "Lossless Scaling FG",
                     color = TextPrimary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                 )
                 Text(
-                    text = if (hasFile) fileName
-                           else stringResource(R.string.settings_lsfg_no_dll_imported),
-                    color = if (hasFile) Accent else TextSecondary,
+                    text = if (enabled)
+                        if (hasFile) displayName
+                        else stringResource(R.string.settings_lsfg_no_dll_imported)
+                    else stringResource(R.string.common_ui_disabled),
+                    color = if (enabled && hasFile) Accent else TextSecondary,
                     fontSize = 11.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Spacer(Modifier.width(8.dp))
-            SmallActionButton(
-                label = stringResource(
-                    if (hasFile) R.string.common_ui_change
-                    else R.string.common_ui_import
+            Switch(
+                checked = enabled,
+                onCheckedChange = onEnabledChanged,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = Accent,
+                    uncheckedThumbColor = TextSecondary,
+                    uncheckedTrackColor = CardBorder,
                 ),
-                textColor = Accent,
-                onClick = onImport,
             )
-            if (hasFile) {
-                Spacer(Modifier.width(6.dp))
-                SmallActionButton(
-                    label = stringResource(R.string.common_ui_remove),
-                    textColor = Color(0xFFFF5C5C),
-                    onClick = onClear,
-                )
+        }
+
+        // Import DLL row — hanya muncul jika enabled
+        AnimatedVisibility(
+            visible = enabled,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            Column {
+                HorizontalDivider(color = CardBorder, thickness = 1.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_lsfg_lossless_dll),
+                            color = TextPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = if (hasFile) displayName
+                                   else stringResource(R.string.settings_lsfg_no_dll_imported),
+                            color = if (hasFile) Accent else TextSecondary,
+                            fontSize = 11.sp,
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    SmallActionButton(
+                        label = stringResource(
+                            if (hasFile) R.string.common_ui_change
+                            else R.string.common_ui_import
+                        ),
+                        textColor = Accent,
+                        onClick = onImport,
+                    )
+                    if (hasFile) {
+                        Spacer(Modifier.width(6.dp))
+                        SmallActionButton(
+                            label = stringResource(R.string.common_ui_remove),
+                            textColor = Color(0xFFFF5C5C),
+                            onClick = onClear,
+                        )
+                    }
+                }
             }
         }
     }

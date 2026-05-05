@@ -179,6 +179,10 @@ class OtherSettingsFragment : Fragment() {
                         onReinstallImagefs = { startImagefsReinstall() },
                         onImportLsfgDll = { lsfgDllPickerLauncher.launch(arrayOf("*/*")) },
                         onClearLsfgDll = { clearLsfgDll() },
+                        onLsfgEnabledChanged = { enabled ->
+                            preferences.edit { putBoolean("lsfg_enabled", enabled) }
+                            refresh()
+                        },
                     )
                 }
             }
@@ -241,6 +245,7 @@ class OtherSettingsFragment : Fragment() {
                 shareClipboard = preferences.getBoolean("share_android_clipboard", false),
                 imagefsInstallProgress = uiState.imagefsInstallProgress,
                 lsfgDllPath = preferences.getString("lsfg_dll_path", "") ?: "",
+                lsfgEnabled = preferences.getBoolean("lsfg_enabled", false),
             )
     }
 
