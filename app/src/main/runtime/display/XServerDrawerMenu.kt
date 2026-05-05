@@ -164,7 +164,6 @@ data class XServerDrawerState(
     val fsrSharpness: Int = 100,
     val colorProfile: Int = 0,
     // LSFG
-    val lsfgCardExpanded: Boolean = false,
     val lsfgEnabled: Boolean = false,
     val lsfgMultiplier: Int = 2,
     val lsfgFlowScale: Float = 0.80f,
@@ -235,7 +234,6 @@ interface XServerDrawerActionListener {
     fun onColorProfileSelected(profile: Int)
 
     // LSFG
-    fun onLsfgCardExpandedChanged(expanded: Boolean)
     fun onLsfgEnabledChanged(enabled: Boolean)
     fun onLsfgMultiplierChanged(multiplier: Int)
     fun onLsfgFlowScaleChanged(scale: Float)
@@ -279,7 +277,6 @@ fun buildXServerDrawerState(
     fsrMode: Int = 0,
     fsrSharpness: Int = 100,
     colorProfile: Int = 0,
-    lsfgCardExpanded: Boolean = false,
     lsfgEnabled: Boolean = false,
     lsfgMultiplier: Int = 2,
     lsfgFlowScale: Float = 0.80f,
@@ -445,7 +442,6 @@ fun buildXServerDrawerState(
         fsrMode = fsrMode,
         fsrSharpness = fsrSharpness,
         colorProfile = colorProfile,
-        lsfgCardExpanded = lsfgCardExpanded,
         lsfgEnabled = lsfgEnabled,
         lsfgMultiplier = lsfgMultiplier,
         lsfgFlowScale = lsfgFlowScale,
@@ -549,9 +545,6 @@ private fun XServerDrawerContent(
                     }
                 }
             }
-
-            // LSFG card — selalu tampil jika DLL sudah di-set
-            XServerLsfgCard(state = state, listener = listener)
 
             Spacer(Modifier.height(6.dp))
         }
@@ -1873,6 +1866,15 @@ private fun XServerScreenEffectsSettingsExpanded(
                     }
                 }
             }
+
+            // LSFG — hanya tampil jika DLL sudah diimport
+            if (state.lsfgDllPath.isNotBlank()) {
+                HorizontalDivider(
+                    color = WinNativeOutline,
+                    thickness = 1.dp,
+                )
+                LsfgInlineSettings(state = state, listener = listener)
+            }
         }
     }
 }
@@ -2067,201 +2069,51 @@ private fun DrawerStatusPill(
     }
 }
 
-// ====================== LSFG Card ======================
+// ====================== LSFG Inline (inside FSR card) ======================
 @Composable
-private fun XServerLsfgCard(
-    state: XServerDrawerState,
-    listener: XServerDrawerActionListener,
-) {
-    val active = state.lsfgEnabled
-    val expanded = state.lsfgCardExpanded
-    val hasDll = state.lsfgDllPath.isNotBlank()
-
-    // Jika DLL belum diimport, tampilkan hint kecil saja
-    if (!hasDll) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(WinNativeSurface)
-                .border(1.dp, WinNativeOutline, RoundedCornerShape(16.dp))
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Box(
-                modifier = Modifier.size(36.dp).clip(RoundedCornerShape(12.dp))
-                    .background(DrawerIconBox),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Tune,
-                    contentDescription = null,
-                    tint = WinNativeTextSecondary,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Lossless Scaling FG",
-                    color = WinNativeTextPrimary,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 13.sp,
-                )
-                Text(
-                    text = stringResource(R.string.settings_lsfg_no_dll_imported),
-                    color = WinNativeTextSecondary,
-                    fontSize = 11.sp,
-                )
-            }
-        }
-        return
-    }
-
-    val chevronRotation by animateFloatAsState(
-        targetValue = if (expanded) 180f else 0f,
-        animationSpec = tween(220, easing = FastOutSlowInEasing),
-        label = "lsfgChevron",
-    )
-    val cardColor by animateColorAsState(
-        targetValue = if (active) DrawerActiveSurface else WinNativeSurface,
-        animationSpec = tween(180),
-        label = "lsfgCardColor",
-    )
-    val borderColor by animateColorAsState(
-        targetValue = if (active) WinNativeAccent.copy(alpha = 0.34f) else WinNativeOutline,
-        animationSpec = tween(180),
-        label = "lsfgBorderColor",
-    )
-    val iconBoxColor by animateColorAsState(
-        targetValue = if (active) WinNativeAccent.copy(alpha = 0.16f) else DrawerIconBox,
-        animationSpec = tween(180),
-        label = "lsfgIconBoxColor",
-    )
-    val shape = RoundedCornerShape(20.dp)
-    val statusInteractionSource = remember { MutableInteractionSource() }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(cardColor)
-            .border(BorderStroke(1.dp, borderColor), shape),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = { listener.onLsfgCardExpandedChanged(!expanded) },
-                )
-                .padding(horizontal = 14.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier.width(4.dp).height(42.dp).clip(CircleShape)
-                    .background(if (active) WinNativeAccent else Color.Transparent),
-            )
-            Spacer(Modifier.width(10.dp))
-            Box(
-                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(14.dp))
-                    .background(iconBoxColor),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Tune,
-                    contentDescription = null,
-                    tint = if (active) WinNativeAccent else WinNativeTextPrimary,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Lossless Scaling FG",
-                    color = WinNativeTextPrimary,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = if (active)
-                        "${state.lsfgMultiplier}x · Flow ${(state.lsfgFlowScale * 100).toInt()}%"
-                    else
-                        stringResource(R.string.common_ui_disabled),
-                    color = WinNativeTextSecondary,
-                    fontSize = 11.sp,
-                    lineHeight = 14.sp,
-                )
-            }
-            Spacer(Modifier.width(10.dp))
-            DrawerStatusPill(
-                text = if (active) stringResource(R.string.common_ui_on)
-                       else stringResource(R.string.common_ui_off),
-                active = active,
-                interactionSource = statusInteractionSource,
-                onClick = { listener.onLsfgEnabledChanged(!active) },
-            )
-            Spacer(Modifier.width(6.dp))
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(WinNativePanel)
-                    .border(1.dp, WinNativeOutline, RoundedCornerShape(12.dp))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { listener.onLsfgCardExpandedChanged(!expanded) },
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.KeyboardArrowDown,
-                    contentDescription = null,
-                    tint = WinNativeAccent,
-                    modifier = Modifier.size(18.dp).rotate(chevronRotation),
-                )
-            }
-        }
-
-        AnimatedVisibility(
-            visible = expanded,
-            enter = fadeIn(tween(180)) + expandVertically(tween(220, easing = FastOutSlowInEasing)),
-            exit = fadeOut(tween(140)) + shrinkVertically(tween(180, easing = FastOutSlowInEasing)),
-        ) {
-            XServerLsfgSettingsExpanded(state = state, listener = listener)
-        }
-    }
-}
-
-@Composable
-private fun XServerLsfgSettingsExpanded(
+private fun LsfgInlineSettings(
     state: XServerDrawerState,
     listener: XServerDrawerActionListener,
 ) {
     val multiplierOptions = listOf("2x", "3x", "4x")
     val presentModeOptions = listOf("FIFO", "Mailbox", "Immediate")
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .background(WinNativePanel)
-                .border(1.dp, WinNativeOutline, RoundedCornerShape(18.dp))
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Header row dengan toggle enable/disable
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Tune,
+                    contentDescription = null,
+                    tint = if (state.lsfgEnabled) WinNativeAccent else WinNativeTextSecondary,
+                    modifier = Modifier.size(15.dp),
+                )
+                Text(
+                    text = "Lossless Scaling FG",
+                    color = WinNativeTextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            DrawerStatusPill(
+                text = if (state.lsfgEnabled) stringResource(R.string.common_ui_on)
+                       else stringResource(R.string.common_ui_off),
+                active = state.lsfgEnabled,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = { listener.onLsfgEnabledChanged(!state.lsfgEnabled) },
+            )
+        }
+
+        if (state.lsfgEnabled) {
             // Multiplier chips
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = stringResource(R.string.settings_lsfg_multiplier),
                     color = WinNativeTextSecondary,
@@ -2270,7 +2122,9 @@ private fun XServerLsfgSettingsExpanded(
                     letterSpacing = 0.3.sp,
                 )
                 Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     multiplierOptions.forEachIndexed { idx, label ->
@@ -2294,50 +2148,22 @@ private fun XServerLsfgSettingsExpanded(
                 onValueChange = { listener.onLsfgFlowScaleChanged(it) },
             )
 
-            // Performance Mode toggle
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_lsfg_performance_mode),
-                    color = WinNativeTextPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-                CompositionLocalProvider(LocalRippleConfiguration provides null) {
-                    Switch(
-                        checked = state.lsfgPerformanceMode,
-                        onCheckedChange = { listener.onLsfgPerformanceModeChanged(it) },
-                        colors = outlinedSwitchColors(WinNativeAccent, WinNativeTextSecondary),
-                    )
-                }
-            }
+            // Performance Mode
+            DrawerBooleanRow(
+                title = stringResource(R.string.settings_lsfg_performance_mode),
+                checked = state.lsfgPerformanceMode,
+                onCheckedChange = { listener.onLsfgPerformanceModeChanged(it) },
+            )
 
-            // HDR Mode toggle
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_lsfg_hdr_mode),
-                    color = WinNativeTextPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-                CompositionLocalProvider(LocalRippleConfiguration provides null) {
-                    Switch(
-                        checked = state.lsfgHdrMode,
-                        onCheckedChange = { listener.onLsfgHdrModeChanged(it) },
-                        colors = outlinedSwitchColors(WinNativeAccent, WinNativeTextSecondary),
-                    )
-                }
-            }
+            // HDR Mode
+            DrawerBooleanRow(
+                title = stringResource(R.string.settings_lsfg_hdr_mode),
+                checked = state.lsfgHdrMode,
+                onCheckedChange = { listener.onLsfgHdrModeChanged(it) },
+            )
 
             // Present Mode chips
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = stringResource(R.string.settings_lsfg_present_mode),
                     color = WinNativeTextSecondary,
@@ -2346,7 +2172,9 @@ private fun XServerLsfgSettingsExpanded(
                     letterSpacing = 0.3.sp,
                 )
                 Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     presentModeOptions.forEachIndexed { idx, label ->
