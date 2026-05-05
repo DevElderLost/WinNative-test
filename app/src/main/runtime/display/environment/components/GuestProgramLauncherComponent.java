@@ -946,8 +946,6 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
 
   // =================== LSFG ===================
   private void applyLsfgEnvVars(EnvVars envVars, ImageFs imageFs) {
-    Context context = environment.getContext();
-    
     if (imageFs == null) {
       envVars.put("DISABLE_LSFG", "1");
       return;
@@ -1037,8 +1035,18 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     envVars.put("LSFG_CONFIG", confToml.getAbsolutePath());
     envVars.put("LSFG_LAST_PATH", new java.io.File(lsfgTmpDir, "lsfg-vk_last").getAbsolutePath());
     envVars.put("LSFG_TMP_DIR", lsfgTmpDir.getAbsolutePath());
-    // JANGAN set LSFG_LEGACY=1 — itu akan menonaktifkan sistem konfigurasi
-    // dan membuat hot-reload tidak berfungsi. Gunakan conf.toml saja.
+    envVars.put("LSFG_MULTIPLIER", String.valueOf(multiplier));
+    envVars.put("LSFG_FLOW_SCALE", flowScale);
+    envVars.put("LSFG_PERFORMANCE_MODE", perfMode ? "1" : "0");
+    envVars.put("LSFG_HDR_MODE", hdrMode ? "1" : "0");
+    envVars.put("LSFG_EXPERIMENTAL_PRESENT_MODE", presentMode);
+    envVars.put("LSFG_DLL_PATH", dllPath);
+    envVars.put("LSFG_DLL_PATH_UNIX", dllPath);
+    // JANGAN set LSFG_LEGACY=1 — itu akan menonaktifkan hot-reload conf.toml
+    if (!processName.isEmpty()) {
+      envVars.put("LSFG_PROCESS", processName);
+      envVars.put("LSFG_PROCESS_EXE", processName);
+    }
 
     Log.d("GuestProgramLauncherComponent", "LSFG armed:"
         + " process='" + processName + "' dll='" + dllPath + "'"
