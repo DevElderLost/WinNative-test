@@ -453,16 +453,16 @@ private const val SEC_VARIABLES = 6
 private const val SEC_INPUT = 7
 private const val SEC_ADVANCED = 8
 
-private fun buildSections(isSteam: Boolean): List<Pair<Int, SidebarSection>> {
+private fun buildSections(isSteam: Boolean, isContainer: Boolean): List<Pair<Int, SidebarSection>> {
     val list = mutableListOf<Pair<Int, SidebarSection>>()
     list += SEC_GENERAL to SidebarSection(Icons.Outlined.Tune, R.string.settings_general_title)
     if (isSteam) list += SEC_STEAM to SidebarSection(Icons.Outlined.Science, R.string.steam_section_title)
     list += SEC_DISPLAY to SidebarSection(Icons.Outlined.Monitor, R.string.common_ui_graphics)
-    list += SEC_ADVANCED to SidebarSection(Icons.Outlined.Settings, R.string.common_ui_advanced)
     list += SEC_INPUT to SidebarSection(Icons.Outlined.SportsEsports, R.string.common_ui_input_controls)
     list += SEC_VARIABLES to SidebarSection(Icons.Outlined.Code, R.string.container_config_variables)
     list += SEC_WINE to SidebarSection(Icons.Outlined.Science, R.string.container_wine_title)
     list += SEC_COMPONENTS to SidebarSection(Icons.Outlined.Extension, R.string.settings_content_components)
+    list += SEC_ADVANCED to SidebarSection(Icons.Outlined.Settings, R.string.common_ui_advanced)
     return list
 }
 
@@ -475,7 +475,8 @@ fun GameSettingsContent(
     callbacks: GameSettingsCallbacks
 ) {
     val isSteam by state.isSteamGame
-    val sections = remember(isSteam) { buildSections(isSteam) }
+    val isContainer by state.isContainerEditMode
+    val sections = remember(isSteam, isContainer) { buildSections(isSteam, isContainer) }
     val selectedIdx by state.currentSection
     val currentSectionId = sections.getOrNull(selectedIdx)?.first ?: SEC_GENERAL
     val saveEnabled by state.isLoaded
@@ -3714,3 +3715,4 @@ private fun SettingSlider(
         )
     }
 }
+
