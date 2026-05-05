@@ -300,6 +300,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     private int fsrMode = 0;
     private int fsrSharpness = 100;
     private int colorProfile = 0;
+
+    // LSFG
+    private static final int LSFG_RUNTIME_VERSION = 1;
     private boolean gyroscopeCardExpanded = false;
     private XServerDrawerStateHolder drawerStateHolder;
     private XServerDrawerActionListener drawerActionListener;
@@ -2915,8 +2918,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 preferences.getBoolean("lsfg_performance_mode", true),
                 preferences.getBoolean("lsfg_hdr_mode", false),
                 lsfgPresentModeStringToIndex(preferences.getString("lsfg_present_mode", "fifo")),
-                preferences.getString("lsfg_dll_path", "") != null
-                        ? preferences.getString("lsfg_dll_path", "") : ""
+                preferences.getString("lsfg_dll_path", "") != null ? preferences.getString("lsfg_dll_path", "") : "",
                 inputProfileNames,
                 inputSelectedIndex,
                 preferences.getBoolean("show_touchscreen_controls_enabled", false),
@@ -3104,13 +3106,44 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                         renderDrawerMenu();
                     }
 
-                    // LSFG callbacks — simpan ke SharedPreferences global
+                    // LSFG callbacks
                     @Override
                     public void onLsfgMultiplierChanged(int multiplier) {
                         preferences.edit().putInt("lsfg_multiplier", multiplier).apply();
                         updateLsfgConfig();
-                      
-                      
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onLsfgFlowScaleChanged(float scale) {
+                        preferences.edit().putFloat("lsfg_flow_scale", scale).apply();
+                        updateLsfgConfig();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onLsfgPerformanceModeChanged(boolean enabled) {
+                        preferences.edit().putBoolean("lsfg_performance_mode", enabled).apply();
+                        updateLsfgConfig();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onLsfgHdrModeChanged(boolean enabled) {
+                        preferences.edit().putBoolean("lsfg_hdr_mode", enabled).apply();
+                        updateLsfgConfig();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onLsfgPresentModeSelected(int index) {
+                        String[] modes = {"fifo", "mailbox", "immediate"};
+                        String mode = (index >= 0 && index < modes.length) ? modes[index] : "fifo";
+                        preferences.edit().putString("lsfg_present_mode", mode).apply();
+                        updateLsfgConfig();
+                        renderDrawerMenu();
+                    }
+
                     @Override
                     public void onInputControlsProfileSelected(int index) {
                         if (index <= 0) {
@@ -3123,22 +3156,12 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     }
 
                     @Override
-                    public void onLsfgFlowScaleChanged(float scale) {
-                        preferences.edit().putFloat("lsfg_flow_scale", scale).apply();
-                        updateLsfgConfig();
-                                            
-                    @Override
                     public void onInputControlsShowOverlayChanged(boolean enabled) {
                         if (inputControlsView != null) inputControlsView.setShowTouchscreenControls(enabled);
                         preferences.edit().putBoolean("show_touchscreen_controls_enabled", enabled).apply();
                         renderDrawerMenu();
                     }
 
-                    @Override
-                    public void onLsfgPerformanceModeChanged(boolean enabled) {
-                        preferences.edit().putBoolean("lsfg_performance_mode", enabled).apply();
-                        updateLsfgConfig();
-                      
                     @Override
                     public void onInputControlsTapToClickChanged(boolean enabled) {
                         isTapToClickEnabled = enabled;
@@ -3147,26 +3170,12 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     }
 
                     @Override
-                    public void onLsfgHdrModeChanged(boolean enabled) {
-                        preferences.edit().putBoolean("lsfg_hdr_mode", enabled).apply();
-                        updateLsfgConfig();
-                      
-                    @Override
                     public void onInputControlsOverlayOpacityChanged(float opacity) {
                         if (inputControlsView != null) inputControlsView.setOverlayOpacity(opacity);
                         preferences.edit().putFloat("overlay_opacity", opacity).apply();
                         renderDrawerMenu();
                     }
 
-                    @Override
-                    public void onLsfgPresentModeSelected(int index) {
-                        String[] modes = {"fifo", "mailbox", "immediate"};
-                        String mode = (index >= 0 && index < modes.length) ? modes[index] : "fifo";
-                        preferences.edit().putString("lsfg_present_mode", mode).apply();
-                        updateLsfgConfig();
-                        renderDrawerMenu();
-                    }
-                      
                     @Override
                     public void onInputControlsTouchscreenHapticsChanged(boolean enabled) {
                         preferences.edit().putBoolean("touchscreen_haptics_enabled", enabled).apply();
@@ -4054,127 +4063,6 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         }
         Log.d("ContainerLaunch", "=== setupWineSystemFiles END === container=" + container.id + " firstTimeBoot=" + firstTimeBoot);
     }
-
-    // =================== LSFG ===================
-    private static final int LSFG_RUNTIME_VERSION = 2;
-
-    private void prepareLsfgRuntime() {
-        if (imageFs == null) return;
-
-        // Baca dari SharedPreferences global (bukan per-shortcut)
-        // lsfgEnabled dan lsfgDllPath disimpan oleh OtherSettingsFragment
-        boolean enabled = preferences.getBoolean("lsfg_enabled", false);
-
-        File rootDir = imageFs.getRootDir();
-        String containerHome = rootDir.getPath() + "/home/xuser";
-        File containerLibDir   = new File(containerHome + "/.local/lib");
-        File containerLayerDir = new File(containerHome + "/.local/share/vulkan/implicit_layer.d");
-        File manifestFile      = new File(containerLayerDir, "VkLayer_LS_frame_generation.json");
-        File soDestFile        = new File(containerLibDir, "liblsfg-vk-layer.so");
-
-        if (!enabled) {
-            if (manifestFile.exists()) {
-                manifestFile.delete();
-                Log.d("XServerDisplayActivity", "LSFG disabled — deleted manifest");
-            }
-            return;
-        }
-
-        // DLL path global dari OtherSettingsFragment
-        String dllPath = preferences.getString("lsfg_dll_path", "");
-        if (dllPath == null || dllPath.isEmpty() || !new File(dllPath).isFile()) {
-            Log.w("XServerDisplayActivity", "LSFG enabled but no imported Lossless.dll found");
-            if (manifestFile.exists()) manifestFile.delete();
-            return;
-        }
-
-        String installedVersion = container != null
-                ? container.getExtra("lsfgRuntimeVersion", "0") : "0";
-        boolean needsInstall = !soDestFile.exists()
-                || !Integer.toString(LSFG_RUNTIME_VERSION).equals(installedVersion);
-
-        if (needsInstall) {
-            containerLibDir.mkdirs();
-            boolean copied = copyLsfgSoFromAssets(soDestFile);
-            if (!copied) {
-                Log.w("XServerDisplayActivity", "LSFG: failed to install liblsfg-vk-layer.so from assets");
-                if (manifestFile.exists()) manifestFile.delete();
-                return;
-            }
-            if (container != null) {
-                container.putExtra("lsfgRuntimeVersion", Integer.toString(LSFG_RUNTIME_VERSION));
-                container.saveData();
-            }
-        }
-
-        if (!soDestFile.exists()) {
-            Log.w("XServerDisplayActivity", "LSFG: liblsfg-vk-layer.so missing after install");
-            if (manifestFile.exists()) manifestFile.delete();
-            return;
-        }
-
-        containerLayerDir.mkdirs();
-        writeLsfgLayerManifest(manifestFile);
-        new File(containerHome + "/.config/lsfg-vk").mkdirs();
-        new File(containerHome + "/.local/share/lsfg-vk").mkdirs();
-
-        Log.d("XServerDisplayActivity", "LSFG runtime prepared: dll=" + dllPath
-                + " so=" + soDestFile.getAbsolutePath());
-    }
-
-    private void writeLsfgLayerManifest(File manifestFile) {
-        // Tentukan api_version dari graphicsDriverConfig (vulkanVersion dari GameSettings)
-        // Format: "1.3" atau "1.4" → tambah ".0" → "1.3.0" / "1.4.0"
-        // Fallback ke "1.3.0" jika graphicsDriverConfig belum tersedia
-        String apiVersion = "1.3.0";
-        if (graphicsDriverConfig != null) {
-            String vkVer = graphicsDriverConfig.get("vulkanVersion");
-            if (vkVer != null && !vkVer.isEmpty()) {
-                String[] parts = vkVer.split("\\.");
-                if (parts.length == 2) {
-                    apiVersion = vkVer + ".0";  // "1.3" → "1.3.0"
-                } else if (parts.length >= 3) {
-                    apiVersion = vkVer;         // "1.3.xxx" sudah lengkap
-                }
-            }
-        }
-        Log.d("XServerDisplayActivity", "LSFG manifest api_version=" + apiVersion);
-        String manifest = "{\n" +
-                "  \"file_format_version\": \"1.0.0\",\n" +
-                "  \"layer\": {\n" +
-                "    \"name\": \"VK_LAYER_LS_frame_generation\",\n" +
-                "    \"type\": \"GLOBAL\",\n" +
-                "    \"api_version\": \"" + apiVersion + "\",\n" +
-                "    \"library_path\": \"../../../lib/liblsfg-vk-layer.so\",\n" +
-                "    \"implementation_version\": \"1\",\n" +
-                "    \"description\": \"Lossless Scaling frame generation layer\",\n" +
-                "    \"functions\": {\n" +
-                "      \"vkGetInstanceProcAddr\": \"layer_vkGetInstanceProcAddr\",\n" +
-                "      \"vkGetDeviceProcAddr\": \"layer_vkGetDeviceProcAddr\"\n" +
-                "    },\n" +
-                "    \"disable_environment\": {\n" +
-                "      \"DISABLE_LSFG\": \"1\"\n" +
-                "    }\n" +
-                "  }\n" +
-                "}\n";
-        com.winlator.cmod.shared.io.FileUtils.writeString(manifestFile, manifest);
-    }
-
-    private boolean copyLsfgSoFromAssets(File destFile) {
-        String assetPath = "lsfg_vk/android_arm64_v8a/liblsfg-vk-layer.so";
-        try (java.io.InputStream is = getAssets().open(assetPath);
-             java.io.FileOutputStream fos = new java.io.FileOutputStream(destFile)) {
-            byte[] buf = new byte[8192];
-            int len;
-            while ((len = is.read(buf)) != -1) fos.write(buf, 0, len);
-            destFile.setExecutable(true, false);
-            return true;
-        } catch (Exception e) {
-            Log.e("XServerDisplayActivity", "Failed to copy liblsfg-vk-layer.so from assets", e);
-            return false;
-        }
-    }
-    // ============================================
 
     private void setupXEnvironment() throws PackageManager.NameNotFoundException {
         cleanupLingeringSessionProcesses("new launch");
@@ -6596,19 +6484,109 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         switch (mode.toLowerCase(java.util.Locale.ROOT)) {
             case "mailbox":   return 1;
             case "immediate": return 2;
-            default:          return 0; // fifo
+            default:          return 0;
         }
     }
 
-    /**
-     * Tulis ulang conf.toml saat setting LSFG diubah dari DrawerMenu agar
-     * hot-reload bekerja — lsfg-vk memantau file conf.toml secara real-time.
-     */
+    private void prepareLsfgRuntime() {
+        if (imageFs == null) return;
+        boolean enabled = preferences.getBoolean("lsfg_enabled", false);
+
+        File rootDir = imageFs.getRootDir();
+        String containerHome = rootDir.getPath() + "/home/xuser";
+        File containerLibDir   = new File(containerHome + "/.local/lib");
+        File containerLayerDir = new File(containerHome + "/.local/share/vulkan/implicit_layer.d");
+        File manifestFile      = new File(containerLayerDir, "VkLayer_LS_frame_generation.json");
+        File soDestFile        = new File(containerLibDir, "liblsfg-vk-layer.so");
+
+        if (!enabled) {
+            if (manifestFile.exists()) { manifestFile.delete(); }
+            return;
+        }
+
+        String dllPath = preferences.getString("lsfg_dll_path", "");
+        if (dllPath == null || dllPath.isEmpty() || !new File(dllPath).isFile()) {
+            Log.w("XServerDisplayActivity", "LSFG enabled but no Lossless.dll found");
+            if (manifestFile.exists()) manifestFile.delete();
+            return;
+        }
+
+        String installedVersion = container != null ? container.getExtra("lsfgRuntimeVersion", "0") : "0";
+        boolean needsInstall = !soDestFile.exists() || !Integer.toString(LSFG_RUNTIME_VERSION).equals(installedVersion);
+
+        if (needsInstall) {
+            containerLibDir.mkdirs();
+            if (!copyLsfgSoFromAssets(soDestFile)) {
+                if (manifestFile.exists()) manifestFile.delete();
+                return;
+            }
+            if (container != null) {
+                container.putExtra("lsfgRuntimeVersion", Integer.toString(LSFG_RUNTIME_VERSION));
+                container.saveData();
+            }
+        }
+
+        if (!soDestFile.exists()) {
+            if (manifestFile.exists()) manifestFile.delete();
+            return;
+        }
+
+        containerLayerDir.mkdirs();
+        writeLsfgLayerManifest(manifestFile);
+        new File(containerHome + "/.config/lsfg-vk").mkdirs();
+        new File(containerHome + "/.local/share/lsfg-vk").mkdirs();
+        Log.d("XServerDisplayActivity", "LSFG runtime prepared");
+    }
+
+    private void writeLsfgLayerManifest(File manifestFile) {
+        String apiVersion = "1.3.0";
+        if (graphicsDriverConfig != null) {
+            String vkVer = graphicsDriverConfig.get("vulkanVersion");
+            if (vkVer != null && !vkVer.isEmpty()) {
+                String[] parts = vkVer.split("\\.");
+                apiVersion = (parts.length == 2) ? vkVer + ".0" : vkVer;
+            }
+        }
+        String manifest = "{\n" +
+                "  \"file_format_version\": \"1.0.0\",\n" +
+                "  \"layer\": {\n" +
+                "    \"name\": \"VK_LAYER_LS_frame_generation\",\n" +
+                "    \"type\": \"GLOBAL\",\n" +
+                "    \"api_version\": \"" + apiVersion + "\",\n" +
+                "    \"library_path\": \"../../../lib/liblsfg-vk-layer.so\",\n" +
+                "    \"implementation_version\": \"1\",\n" +
+                "    \"description\": \"Lossless Scaling frame generation layer\",\n" +
+                "    \"functions\": {\n" +
+                "      \"vkGetInstanceProcAddr\": \"layer_vkGetInstanceProcAddr\",\n" +
+                "      \"vkGetDeviceProcAddr\": \"layer_vkGetDeviceProcAddr\"\n" +
+                "    },\n" +
+                "    \"disable_environment\": {\n" +
+                "      \"DISABLE_LSFG\": \"1\"\n" +
+                "    }\n" +
+                "  }\n" +
+                "}\n";
+        com.winlator.cmod.shared.io.FileUtils.writeString(manifestFile, manifest);
+    }
+
+    private boolean copyLsfgSoFromAssets(File destFile) {
+        try (java.io.InputStream is = getAssets().open("lsfg_vk/android_arm64_v8a/liblsfg-vk-layer.so");
+             java.io.FileOutputStream fos = new java.io.FileOutputStream(destFile)) {
+            byte[] buf = new byte[8192];
+            int len;
+            while ((len = is.read(buf)) != -1) fos.write(buf, 0, len);
+            destFile.setExecutable(true, false);
+            return true;
+        } catch (Exception e) {
+            Log.e("XServerDisplayActivity", "Failed to copy liblsfg-vk-layer.so", e);
+            return false;
+        }
+    }
+
     private void updateLsfgConfig() {
         if (imageFs == null) return;
         String containerHome = imageFs.getRootDir().getPath() + "/home/xuser";
         File confToml = new File(containerHome + "/.config/lsfg-vk/conf.toml");
-        if (!confToml.exists()) return; // game belum berjalan atau LSFG belum init
+        if (!confToml.exists()) return;
 
         String dllPath = preferences.getString("lsfg_dll_path", "");
         if (dllPath == null || dllPath.isEmpty()) return;
@@ -6619,13 +6597,13 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         boolean perfMode = preferences.getBoolean("lsfg_performance_mode", true);
         boolean hdrMode  = preferences.getBoolean("lsfg_hdr_mode", false);
         String presentMode;
-        switch (preferences.getString("lsfg_present_mode", "fifo").toLowerCase(java.util.Locale.ROOT)) {
+        String prefPresent = preferences.getString("lsfg_present_mode", "fifo");
+        switch (prefPresent != null ? prefPresent.toLowerCase(java.util.Locale.ROOT) : "fifo") {
             case "mailbox":   presentMode = "mailbox";   break;
             case "immediate": presentMode = "immediate"; break;
             default:          presentMode = "fifo";      break;
         }
 
-        // Resolve process name dari guestProgramLauncherComponent
         String processName = "";
         if (guestProgramLauncherComponent != null) {
             String exe = guestProgramLauncherComponent.getGuestExecutable();
@@ -6653,8 +6631,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             toml.append("present_mode = \"").append(presentMode).append("\"\n");
         }
         com.winlator.cmod.shared.io.FileUtils.writeString(confToml, toml.toString());
-        Log.d("XServerDisplayActivity", "LSFG config updated: multiplier=" + multiplier
-                + " flowScale=" + flowScale + " perfMode=" + perfMode);
+        Log.d("XServerDisplayActivity", "LSFG config updated: mult=" + multiplier + " flow=" + flowScale);
     }
 
     private void normalizeSyncEnvVars(com.winlator.cmod.runtime.wine.EnvVars envVars) {

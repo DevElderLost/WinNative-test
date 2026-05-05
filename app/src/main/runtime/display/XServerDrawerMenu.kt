@@ -81,7 +81,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.OutlinedTextField
@@ -132,8 +131,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import com.winlator.cmod.R
 import com.winlator.cmod.shared.theme.WinNativeBackground
 import com.winlator.cmod.shared.theme.WinNativeOutline
@@ -426,6 +423,7 @@ interface XServerDrawerActionListener {
     fun onLsfgPerformanceModeChanged(enabled: Boolean)
     fun onLsfgHdrModeChanged(enabled: Boolean)
     fun onLsfgPresentModeSelected(index: Int)
+
     fun onInputControlsProfileSelected(index: Int)
 
     fun onInputControlsShowOverlayChanged(enabled: Boolean)
@@ -810,8 +808,6 @@ internal fun XServerDrawerContent(
                     }
                 }
             }
-
-            Spacer(Modifier.height(6.dp))
         }
     }
 }
@@ -1897,81 +1893,166 @@ private fun ScreenEffectsPaneContent(
                         .padding(horizontal = (12f * paneScale).dp, vertical = (12f * paneScale).dp),
                 verticalArrangement = Arrangement.spacedBy((10f * paneScale).dp),
             ) {
-                DrawerBooleanRow(
-                    title = stringResource(R.string.session_drawer_super_resolution),
-                    checked = state.fsrEnabled,
-                    onCheckedChange = listener::onFSREnabledChanged,
-                )
+            DrawerBooleanRow(
+                title = stringResource(R.string.session_drawer_super_resolution),
+                checked = state.fsrEnabled,
+                onCheckedChange = listener::onFSREnabledChanged,
+            )
 
-                if (state.fsrEnabled) {
-                    Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
-                        PaneSectionLabel(stringResource(R.string.session_drawer_upscaler_mode))
-                        val upscaleLabels =
-                            listOf(
-                                stringResource(R.string.session_drawer_upscaler_fsr),
-                                stringResource(R.string.session_drawer_upscaler_dls),
-                            )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy((8f * paneScale).dp),
-                        ) {
-                            upscaleLabels.forEachIndexed { index, label ->
-                                HUDToggleChip(
-                                    label = label,
-                                    checked = state.fsrMode == index,
-                                    onClick = { listener.onFSRModeSelected(index) },
-                                    modifier = Modifier.weight(1f),
-                                )
-                            }
-                        }
-
-                        DrawerSliderRow(
-                            label = stringResource(R.string.session_drawer_sharpness),
-                            valueText = "${state.fsrSharpness}%",
-                            value = state.fsrSharpness.toFloat(),
-                            valueRange = 0f..100f,
-                            steps = 99,
-                            onValueChange = { listener.onFSRSharpnessChanged(it.roundToInt()) },
-                        )
-                    }
-                }
-
+            if (state.fsrEnabled) {
                 Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
-                    PaneSectionLabel(stringResource(R.string.session_drawer_color_profile))
-
-                    val profiles =
+                    PaneSectionLabel(stringResource(R.string.session_drawer_upscaler_mode))
+                    val upscaleLabels =
                         listOf(
-                            stringResource(R.string.session_drawer_color_profile_disabled),
-                            stringResource(R.string.session_drawer_color_profile_hdr),
-                            stringResource(R.string.session_drawer_color_profile_natural),
-                            stringResource(R.string.session_drawer_color_profile_crt),
+                            stringResource(R.string.session_drawer_upscaler_fsr),
+                            stringResource(R.string.session_drawer_upscaler_dls),
                         )
-
-                    ChipFlow {
-                        profiles.forEachIndexed { index, label ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy((8f * paneScale).dp),
+                    ) {
+                        upscaleLabels.forEachIndexed { index, label ->
                             HUDToggleChip(
                                 label = label,
-                                checked = state.colorProfile == index,
-                                onClick = { listener.onColorProfileSelected(index) },
+                                checked = state.fsrMode == index,
+                                onClick = { listener.onFSRModeSelected(index) },
+                                modifier = Modifier.weight(1f),
                             )
                         }
                     }
-                }
 
-                // ==================== LSFG SECTION ====================
-                if (state.lsfgDllPath.isNotBlank()) {
-                    HorizontalDivider(
-                        color = WinNativeOutline,
-                        thickness = 1.dp,
+                    DrawerSliderRow(
+                        label = stringResource(R.string.session_drawer_sharpness),
+                        valueText = "${state.fsrSharpness}%",
+                        value = state.fsrSharpness.toFloat(),
+                        valueRange = 0f..100f,
+                        steps = 99,
+                        onValueChange = { listener.onFSRSharpnessChanged(it.roundToInt()) },
                     )
-                    LsfgInlineSettings(state = state, listener = listener)
                 }
-                // ====================================================
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy((8f * paneScale).dp)) {
+                PaneSectionLabel(stringResource(R.string.session_drawer_color_profile))
+
+                val profiles =
+                    listOf(
+                        stringResource(R.string.session_drawer_color_profile_disabled),
+                        stringResource(R.string.session_drawer_color_profile_hdr),
+                        stringResource(R.string.session_drawer_color_profile_natural),
+                        stringResource(R.string.session_drawer_color_profile_crt),
+                    )
+
+                ChipFlow {
+                    profiles.forEachIndexed { index, label ->
+                        HUDToggleChip(
+                            label = label,
+                            checked = state.colorProfile == index,
+                            onClick = { listener.onColorProfileSelected(index) },
+                        )
+                    }
+                }
+            }
+
+            // LSFG — hanya tampil jika aktif dan DLL sudah diimport
+            if (state.lsfgEnabled && state.lsfgDllPath.isNotBlank()) {
+                HorizontalDivider(
+                    color = DrawerOutline,
+                    thickness = 1.dp,
+                    modifier = Modifier.padding(vertical = (4f * paneScale).dp),
+                )
+                LsfgInlineSettings(state = state, listener = listener, paneScale = paneScale)
+            }
             }
         }
     }
 }
 
+
+// ====================== LSFG Inline (inside Screen Effects pane) ======================
+@Composable
+private fun LsfgInlineSettings(
+    state: XServerDrawerState,
+    listener: XServerDrawerActionListener,
+    paneScale: Float = 1f,
+) {
+    val multiplierOptions = listOf("2x", "3x", "4x")
+    val presentModeOptions = listOf("FIFO", "Mailbox", "Immediate")
+
+    Column(verticalArrangement = Arrangement.spacedBy((10f * paneScale).dp)) {
+        // Header — text label saja
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy((6f * paneScale).dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Tune,
+                contentDescription = null,
+                tint = DrawerAccent,
+                modifier = Modifier.size((14f * paneScale).dp),
+            )
+            Text(
+                text = "Lossless Scaling FG",
+                color = DrawerTextPrimary,
+                fontSize = (13f * paneScale).sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+
+        // Multiplier chips
+        Column(verticalArrangement = Arrangement.spacedBy((6f * paneScale).dp)) {
+            PaneSectionLabel(stringResource(R.string.settings_lsfg_multiplier))
+            ChipFlow {
+                multiplierOptions.forEachIndexed { idx, label ->
+                    HUDToggleChip(
+                        label = label,
+                        checked = state.lsfgMultiplier == (idx + 2),
+                        onClick = { listener.onLsfgMultiplierChanged(idx + 2) },
+                    )
+                }
+            }
+        }
+
+        // Flow Scale slider
+        DrawerSliderRow(
+            label = stringResource(R.string.settings_lsfg_flow_scale),
+            valueText = "${(state.lsfgFlowScale * 100).toInt()}%",
+            value = state.lsfgFlowScale,
+            valueRange = 0.25f..1.0f,
+            steps = 14,
+            onValueChange = { listener.onLsfgFlowScaleChanged(it) },
+        )
+
+        // Performance Mode
+        DrawerBooleanRow(
+            title = stringResource(R.string.settings_lsfg_performance_mode),
+            checked = state.lsfgPerformanceMode,
+            onCheckedChange = { listener.onLsfgPerformanceModeChanged(it) },
+        )
+
+        // HDR Mode
+        DrawerBooleanRow(
+            title = stringResource(R.string.settings_lsfg_hdr_mode),
+            checked = state.lsfgHdrMode,
+            onCheckedChange = { listener.onLsfgHdrModeChanged(it) },
+        )
+
+        // Present Mode chips
+        Column(verticalArrangement = Arrangement.spacedBy((6f * paneScale).dp)) {
+            PaneSectionLabel(stringResource(R.string.settings_lsfg_present_mode))
+            ChipFlow {
+                presentModeOptions.forEachIndexed { idx, label ->
+                    HUDToggleChip(
+                        label = label,
+                        checked = state.lsfgPresentModeIndex == idx,
+                        onClick = { listener.onLsfgPresentModeSelected(idx) },
+                    )
+                }
+            }
+        }
+    }
+}
+// ====================== end LSFG ======================
 
 @Composable
 private fun TaskManagerPaneContent(
@@ -3270,10 +3351,11 @@ private fun HUDMetricInputDialog(
 
     WinNativeDialogShell(
         onDismiss = onDismiss,
-        title = when (editor) {
-            HUDMetricEditor.ALPHA -> stringResource(R.string.session_drawer_hud_alpha_input_title)
-            HUDMetricEditor.SCALE -> stringResource(R.string.session_drawer_hud_scale_input_title)
-        },
+        title =
+            when (editor) {
+                HUDMetricEditor.ALPHA -> stringResource(R.string.session_drawer_hud_alpha_input_title)
+                HUDMetricEditor.SCALE -> stringResource(R.string.session_drawer_hud_scale_input_title)
+            },
         maxWidth = 380.dp,
     ) {
         Text(
@@ -3283,38 +3365,53 @@ private fun HUDMetricInputDialog(
             lineHeight = 18.sp,
         )
         Spacer(Modifier.height(14.dp))
-
         OutlinedTextField(
             value = value,
             onValueChange = { incoming -> value = incoming.filter(Char::isDigit) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             suffix = {
-                Text("%", color = DrawerTextSecondary, fontSize = 13.sp)
+                Text(
+                    text = "%",
+                    color = DrawerTextSecondary,
+                    fontSize = 13.sp,
+                )
             },
             textStyle = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(color = DrawerTextPrimary),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = DrawerAccent,
-                unfocusedBorderColor = DrawerOutline,
-                focusedTextColor = DrawerTextPrimary,
-                unfocusedTextColor = DrawerTextPrimary,
-                focusedContainerColor = DrawerBackground,
-                unfocusedContainerColor = DrawerBackground,
-                cursorColor = DrawerAccent,
-            ),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(
-                onDone = {
-                    keyboardController?.hide()
-                    submit()
-                }
-            ),
+            colors =
+                OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = DrawerAccent,
+                    unfocusedBorderColor = DrawerOutline,
+                    focusedTextColor = DrawerTextPrimary,
+                    unfocusedTextColor = DrawerTextPrimary,
+                    focusedContainerColor = DrawerBackground,
+                    unfocusedContainerColor = DrawerBackground,
+                    focusedLabelColor = DrawerTextSecondary,
+                    unfocusedLabelColor = DrawerTextSecondary,
+                    cursorColor = DrawerAccent,
+                ),
+            keyboardOptions =
+                KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Done,
+                ),
+            keyboardActions =
+                KeyboardActions(
+                    onDone = {
+                        keyboardController?.hide()
+                        submit()
+                    },
+                ),
         )
-
         Spacer(Modifier.height(16.dp))
-        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(DrawerOutline))
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(DrawerOutline),
+        )
         Spacer(Modifier.height(16.dp))
-
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
@@ -3337,7 +3434,6 @@ private fun HUDMetricInputDialog(
         }
     }
 }
-
 
 @Composable
 private fun HUDToggleChip(
@@ -3469,116 +3565,6 @@ private fun DrawerBooleanRow(
         }
     }
 }
-
-// ====================== LSFG Inline (inside FSR card) ======================
-@Composable
-private fun LsfgInlineSettings(
-    state: XServerDrawerState,
-    listener: XServerDrawerActionListener,
-) {
-    // Hanya tampil jika LSFG aktif dan DLL sudah diimport
-    if (!state.lsfgEnabled || state.lsfgDllPath.isBlank()) return
-
-    val multiplierOptions = listOf("2x", "3x", "4x")
-    val presentModeOptions = listOf("FIFO", "Mailbox", "Immediate")
-
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        // Header — text saja, tanpa toggle
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.Tune,
-                contentDescription = null,
-                tint = DrawerAccent,
-                modifier = Modifier.size(15.dp),
-            )
-            Text(
-                text = "Lossless Scaling FG",
-                color = WinNativeTextPrimary,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-
-        // Multiplier chips
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = stringResource(R.string.settings_lsfg_multiplier),
-                color = WinNativeTextSecondary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 0.3.sp,
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                multiplierOptions.forEachIndexed { idx, label ->
-                    val mult = idx + 2
-                    HUDToggleChip(
-                        label = label,
-                        checked = state.lsfgMultiplier == mult,
-                        onClick = { listener.onLsfgMultiplierChanged(mult) },
-                    )
-                }
-            }
-        }
-
-        // Flow Scale slider
-        DrawerSliderRow(
-            label = stringResource(R.string.settings_lsfg_flow_scale),
-            valueText = "${(state.lsfgFlowScale * 100).toInt()}%",
-            value = state.lsfgFlowScale,
-            valueRange = 0.25f..1.0f,
-            steps = 14,
-            onValueChange = { listener.onLsfgFlowScaleChanged(it) },
-        )
-
-        // Performance Mode
-        DrawerBooleanRow(
-            title = stringResource(R.string.settings_lsfg_performance_mode),
-            checked = state.lsfgPerformanceMode,
-            onCheckedChange = { listener.onLsfgPerformanceModeChanged(it) },
-        )
-
-        // HDR Mode
-        DrawerBooleanRow(
-            title = stringResource(R.string.settings_lsfg_hdr_mode),
-            checked = state.lsfgHdrMode,
-            onCheckedChange = { listener.onLsfgHdrModeChanged(it) },
-        )
-
-        // Present Mode chips
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(
-                text = stringResource(R.string.settings_lsfg_present_mode),
-                color = WinNativeTextSecondary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 0.3.sp,
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                presentModeOptions.forEachIndexed { idx, label ->
-                    HUDToggleChip(
-                        label = label,
-                        checked = state.lsfgPresentModeIndex == idx,
-                        onClick = { listener.onLsfgPresentModeSelected(idx) },
-                    )
-                }
-            }
-        }
-    }
-}
-// ====================== end LSFG ======================
 
 @Composable
 private fun FPSLimiterSelection(
