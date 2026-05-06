@@ -27,4 +27,5 @@
     <item type="id" name="main_menu_magnifier" />
     <item type="id" name="main_menu_logs" />
     <item type="id" name="main_menu_exit" />
+    <item type="id" name="main_menu_simulated_touch" />
 </resources>
