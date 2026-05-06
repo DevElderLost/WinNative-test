@@ -66,6 +66,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,13 +83,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.material3.HorizontalDivider
 import com.winlator.cmod.R
 import com.winlator.cmod.shared.ui.outlinedSwitchColors
 
@@ -1107,13 +1101,17 @@ private fun LsfgToggleCard(
     onImport: () -> Unit,
     onClear: () -> Unit,
 ) {
-    val hasFile = dllPath.isNotBlank()
-    // Selalu tampilkan "Lossless.dll" — bukan full path
-    val rawFileName = dllPath.substringAfterLast('/').substringAfterLast('\\')
-    val displayName = rawFileName
-    .replaceFirst(Regex("^global-\\d+-"), "")
-    .ifBlank { "Lossless.dll" }
-    
+    // rememberUpdatedState memastikan nilai terbaru selalu terbaca di dalam
+    // AnimatedVisibility — tanpa ini konten animasi pakai snapshot state lama
+    // saat toggle diubah, sehingga nama DLL berbeda antara switch row dan import row.
+    val currentDllPath by rememberUpdatedState(dllPath)
+    val hasFile = currentDllPath.isNotBlank()
+    val displayName = if (hasFile)
+        currentDllPath.substringAfterLast('/').substringAfterLast('\\')
+            .replaceFirst(Regex("^.*?-\\d{10,}-"), "")
+            .ifBlank { currentDllPath.substringAfterLast('/').substringAfterLast('\\') }
+    else ""
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
