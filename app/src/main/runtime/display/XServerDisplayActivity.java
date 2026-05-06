@@ -20,9 +20,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.net.Uri;
 import android.opengl.GLSurfaceView;
-import android.text.format.DateFormat;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -54,7 +52,6 @@ import androidx.core.graphics.Insets;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
-import androidx.core.content.FileProvider;
 import androidx.compose.ui.platform.ComposeView;
 import androidx.core.view.WindowInsetsCompat;
 import com.winlator.cmod.BuildConfig;
@@ -73,6 +70,7 @@ import com.winlator.cmod.feature.setup.SetupWizardActivity;
 import com.winlator.cmod.runtime.container.Container;
 import com.winlator.cmod.runtime.container.ContainerManager;
 import com.winlator.cmod.runtime.container.Shortcut;
+import com.winlator.cmod.feature.settings.DebugDialog;
 import com.winlator.cmod.feature.settings.DXVKConfigUtils;
 import com.winlator.cmod.feature.settings.GraphicsDriverConfigUtils;
 import com.winlator.cmod.feature.shortcuts.ShortcutsFragment;
@@ -129,7 +127,7 @@ import com.winlator.cmod.runtime.display.ui.XServerView;
 import com.winlator.cmod.shared.android.FixedFontScaleAppCompatActivity;
 import com.winlator.cmod.runtime.input.ui.InputControlsView;
 import com.winlator.cmod.runtime.input.ui.TouchpadView;
-import com.winlator.cmod.runtime.system.LogFileUtils;
+import com.winlator.cmod.runtime.system.ui.LogView;
 import com.winlator.cmod.runtime.display.winhandler.MouseEventFlags;
 import com.winlator.cmod.runtime.display.winhandler.OnGetProcessInfoListener;
 import com.winlator.cmod.runtime.display.winhandler.ProcessInfo;
@@ -157,16 +155,12 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
-import java.util.List;
 import java.util.HashSet;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -274,14 +268,13 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     private boolean firstTimeBoot = false;
     private SharedPreferences preferences;
     private boolean isMouseDisabled = false;
+    private boolean isSimulatedTouch = false;
     private OnExtractFileListener onExtractFileListener;
     private WinHandler winHandler;
     private WineRequestHandler wineRequestHandler;
     private float globalCursorSpeed = 1.0f;
     private MagnifierView magnifierView;
-    private Callback<String> logStreamSink;
-    private BufferedWriter logStreamWriter;
-    private File logStreamFile;
+    private DebugDialog debugDialog;
     private int taskAffinityMask = 0;
     private int taskAffinityMaskWoW64 = 0;
     private int frameRatingWindowId = -1;
@@ -308,6 +301,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     private int fsrMode = 0;
     private int fsrSharpness = 100;
     private int colorProfile = 0;
+
+    // LSFG
+    private static final int LSFG_RUNTIME_VERSION = 3;
     private boolean gyroscopeCardExpanded = false;
     private XServerDrawerStateHolder drawerStateHolder;
     private XServerDrawerActionListener drawerActionListener;
@@ -694,6 +690,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     eventFile.delete();
                 }
             }
+            try { new File(devInputDir, "event0").createNewFile(); } catch (Exception ignored) {}
         }
         winHandler.setFakeInputPath(devInputDir.getAbsolutePath());
 
@@ -836,7 +833,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         numControllers = Math.max(1, Math.min(numControllers, 4));
         for (int i = 0; i < numControllers; i++) {
             try {
-                new File(devInputDir, "event" + i).createNewFile();
+                File ef = new File(devInputDir, "event" + i);
+                if (!ef.exists()) ef.createNewFile();
             } catch (Exception e) {
             }
         }
@@ -897,8 +895,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
 
         ProcessHelper.removeAllDebugCallbacks();
         if (enableLogsMenu) {
-            LogFileUtils.setFilename(getExecutable());
-            attachLogStreamSink();
+            LogView.setFilename(getExecutable());
+            ProcessHelper.addDebugCallback(debugDialog = new DebugDialog(this));
         }
 
         graphicsDriver = container.getGraphicsDriver();
@@ -2101,114 +2099,17 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         }
     }
 
-    private void attachLogStreamSink() {
-        try {
-            logStreamFile = LogFileUtils.getLogFile(this);
-            logStreamWriter = new BufferedWriter(new FileWriter(logStreamFile));
-        } catch (IOException e) {
-            Log.w("XServerLogs", "Failed to open log file writer", e);
-            logStreamWriter = null;
-            logStreamFile = null;
-        }
-        Callback<String> sink = new Callback<String>() {
-            @Override
-            public synchronized void call(String line) {
-                String stamped = "[" + DateFormat.format("HH:mm:ss", System.currentTimeMillis())
-                        + "]  " + line.replace("\n", "");
-                XServerDrawerStateHolder holder = drawerStateHolder;
-                if (holder != null) holder.appendLogLine(stamped);
-                BufferedWriter writer = logStreamWriter;
-                if (writer != null) {
-                    try {
-                        writer.write(stamped);
-                        writer.write("\n");
-                        writer.flush();
-                    } catch (IOException ignored) {
-                    }
-                }
-            }
-        };
-        logStreamSink = sink;
-        ProcessHelper.addDebugCallback(sink);
-    }
-
-    private void shareLogStream() {
-        try {
-            File shareDir = new File(getCacheDir(), "log_shares");
-            if (!shareDir.exists()) shareDir.mkdirs();
-            String stamp = (String) DateFormat.format("yyyy-MM-dd_HH-mm-ss", new Date());
-            File shareFile = new File(shareDir, "session_logs_" + stamp + ".txt");
-
-            BufferedWriter writer = logStreamWriter;
-            if (writer != null) {
-                try {
-                    writer.flush();
-                } catch (IOException ignored) {
-                }
-            }
-
-            File source = logStreamFile;
-            boolean wrote = false;
-            if (source != null && source.exists() && source.length() > 0) {
-                try (java.io.InputStream in = new java.io.FileInputStream(source);
-                     java.io.OutputStream out = new java.io.FileOutputStream(shareFile)) {
-                    byte[] buf = new byte[8192];
-                    int n;
-                    while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-                    out.flush();
-                    wrote = true;
-                }
-            }
-
-            if (!wrote) {
-                XServerDrawerStateHolder holder = drawerStateHolder;
-                List<String> lines = holder != null ? holder.snapshotLogLines() : new ArrayList<>();
-                if (lines.isEmpty()) {
-                    showToast(this, getString(R.string.session_drawer_logs_share_empty));
-                    return;
-                }
-                try (BufferedWriter out = new BufferedWriter(new FileWriter(shareFile))) {
-                    for (String line : lines) {
-                        out.write(line);
-                        out.write("\n");
-                    }
-                }
-            }
-
-            String authority = getPackageName() + ".tileprovider";
-            Uri uri = FileProvider.getUriForFile(this, authority, shareFile);
-            Intent shareIntent = new Intent(Intent.ACTION_SEND);
-            shareIntent.setType("text/plain");
-            shareIntent.putExtra(Intent.EXTRA_STREAM, uri);
-            shareIntent.putExtra(Intent.EXTRA_SUBJECT, getString(R.string.session_drawer_logs_share_subject));
-            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(Intent.createChooser(shareIntent, getString(R.string.session_drawer_logs_share_chooser)));
-        } catch (Exception e) {
-            Log.w("XServerLogs", "Failed to share log stream", e);
-            showToast(this, getString(R.string.session_drawer_logs_share_failed));
-        }
-    }
-
     private void cleanupDebugDialog(String trigger) {
-        Callback<String> sink = logStreamSink;
-        if (sink != null) {
-            try {
-                ProcessHelper.removeDebugCallback(sink);
-            } catch (Exception e) {
-                Log.w("XServerLeakCheck", "Failed to remove log sink during " + trigger, e);
-            }
-            logStreamSink = null;
+        DebugDialog dialog = debugDialog;
+        if (dialog == null) return;
+        try {
+            ProcessHelper.removeDebugCallback(dialog);
+            dialog.dispose();
+        } catch (Exception e) {
+            Log.w("XServerLeakCheck", "Failed to release debug dialog during " + trigger, e);
+        } finally {
+            debugDialog = null;
         }
-        BufferedWriter writer = logStreamWriter;
-        if (writer != null) {
-            try {
-                writer.close();
-            } catch (IOException ignored) {
-            } finally {
-                logStreamWriter = null;
-            }
-        }
-        logStreamFile = null;
     }
 
     private void stopXServer(String trigger) {
@@ -3011,6 +2912,14 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 fsrMode,
                 fsrSharpness,
                 colorProfile,
+                // LSFG — baca dari SharedPreferences global
+                preferences.getBoolean("lsfg_enabled", false),
+                preferences.getInt("lsfg_multiplier", 2),
+                preferences.getFloat("lsfg_flow_scale", 0.80f),
+                preferences.getBoolean("lsfg_performance_mode", true),
+                preferences.getBoolean("lsfg_hdr_mode", false),
+                lsfgPresentModeStringToIndex(preferences.getString("lsfg_present_mode", "fifo")),
+                preferences.getString("lsfg_dll_path", "") != null ? preferences.getString("lsfg_dll_path", "") : "",
                 inputProfileNames,
                 inputSelectedIndex,
                 preferences.getBoolean("show_touchscreen_controls_enabled", false),
@@ -3018,6 +2927,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 preferences.getFloat("overlay_opacity", InputControlsView.DEFAULT_OVERLAY_OPACITY),
                 preferences.getBoolean("touchscreen_haptics_enabled", false),
                 preferences.getBoolean(ControllerManager.PREF_VIBRATION_GLOBAL, true),
+                isSimulatedTouch,
                 xServerView != null && xServerView.getRenderer() != null && xServerView.getRenderer().isFullscreen()
         );
 
@@ -3198,6 +3108,44 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                         renderDrawerMenu();
                     }
 
+                    // LSFG callbacks
+                    @Override
+                    public void onLsfgMultiplierChanged(int multiplier) {
+                        preferences.edit().putInt("lsfg_multiplier", multiplier).apply();
+                        updateLsfgConfig();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onLsfgFlowScaleChanged(float scale) {
+                        preferences.edit().putFloat("lsfg_flow_scale", scale).apply();
+                        updateLsfgConfig();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onLsfgPerformanceModeChanged(boolean enabled) {
+                        preferences.edit().putBoolean("lsfg_performance_mode", enabled).apply();
+                        updateLsfgConfig();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onLsfgHdrModeChanged(boolean enabled) {
+                        preferences.edit().putBoolean("lsfg_hdr_mode", enabled).apply();
+                        updateLsfgConfig();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onLsfgPresentModeSelected(int index) {
+                        String[] modes = {"fifo", "mailbox", "immediate"};
+                        String mode = (index >= 0 && index < modes.length) ? modes[index] : "fifo";
+                        preferences.edit().putString("lsfg_present_mode", mode).apply();
+                        updateLsfgConfig();
+                        renderDrawerMenu();
+                    }
+
                     @Override
                     public void onInputControlsProfileSelected(int index) {
                         if (index <= 0) {
@@ -3240,6 +3188,13 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     public void onInputControlsGamepadVibrationChanged(boolean enabled) {
                         preferences.edit().putBoolean(ControllerManager.PREF_VIBRATION_GLOBAL, enabled).apply();
                         if (winHandler != null) winHandler.setGlobalVibrationEnabled(enabled);
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onSimulatedTouchChanged(boolean enabled) {
+                        isSimulatedTouch = enabled;
+                        touchpadView.setSimTouchScreen(isSimulatedTouch);
                         renderDrawerMenu();
                     }
 
@@ -3289,26 +3244,6 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     @Override
                     public void onTaskManagerNewTask(String command) {
                         if (winHandler != null) winHandler.exec(command);
-                    }
-
-                    @Override
-                    public void onLogsClear() {
-                        if (drawerStateHolder != null) drawerStateHolder.clearLogLines();
-                    }
-
-                    @Override
-                    public void onLogsPauseChanged(boolean paused) {
-                        if (drawerStateHolder != null) drawerStateHolder.setLogsPaused(paused);
-                    }
-
-                    @Override
-                    public void onLogsPaneVisibilityChanged(boolean visible) {
-                        if (drawerStateHolder != null) drawerStateHolder.setLogsPaneVisible(visible);
-                    }
-
-                    @Override
-                    public void onLogsShare() {
-                        shareLogStream();
                     }
                 };
         }
@@ -3648,6 +3583,11 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 touchpadView.setMouseEnabled(!isMouseDisabled);
                 renderDrawerMenu();
                 break;
+            case R.id.main_menu_simulated_touch:
+                isSimulatedTouch = !isSimulatedTouch;
+                touchpadView.setSimTouchScreen(isSimulatedTouch);
+                renderDrawerMenu();
+                break;
             case R.id.main_menu_toggle_fullscreen:
                 renderer.toggleFullscreen();
                 touchpadView.toggleFullscreen();
@@ -3693,6 +3633,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 }
                 renderDrawerMenu();
                 break;
+            case R.id.main_menu_logs:
+                debugDialog.show();
+                break;
             case R.id.main_menu_native_rendering:
                 isNativeRenderingEnabled = !isNativeRenderingEnabled;
                 preferences.edit().putBoolean("use_dri3", isNativeRenderingEnabled).apply();
@@ -3724,6 +3667,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             case R.id.main_menu_fps_monitor:
             case R.id.main_menu_relative_mouse_movement:
             case R.id.main_menu_disable_mouse:
+            case R.id.main_menu_simulated_touch:
             case R.id.main_menu_toggle_fullscreen:
             case R.id.main_menu_magnifier:
                 return true;
@@ -4209,6 +4153,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             // Normalize synchronization environment variables (NTSync / ESync).
             // This auto-detects NTSync and falls back to ESync when unavailable.
             normalizeSyncEnvVars(envVars);
+            prepareLsfgRuntime();
 
             ArrayList<String> bindingPaths = new ArrayList<>();
             String drives = shortcut != null ? getShortcutSetting("drives", container.getDrives()) : container.getDrives();
@@ -4451,7 +4396,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             }
 
             String simTouchScreen = shortcut.getExtra("simTouchScreen");
-            touchpadView.setSimTouchScreen(simTouchScreen.equals("1"));
+            isSimulatedTouch = simTouchScreen.equals("1");
+            touchpadView.setSimTouchScreen(isSimulatedTouch);
         }
 
         startTouchscreenTimeout();
@@ -6548,6 +6494,153 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
      *    auto-detect NTSync — use it if /dev/ntsync is accessible,
      *    otherwise fall back to ESync.
      */
+    private static int lsfgPresentModeStringToIndex(String mode) {
+        if (mode == null) return 0;
+        switch (mode.toLowerCase(java.util.Locale.ROOT)) {
+            case "mailbox":   return 1;
+            case "immediate": return 2;
+            default:          return 0;
+        }
+    }
+
+    private void prepareLsfgRuntime() {
+        if (imageFs == null) return;
+        boolean enabled = preferences.getBoolean("lsfg_enabled", false);
+
+        File rootDir = imageFs.getRootDir();
+        String containerHome = rootDir.getPath() + "/home/xuser";
+        File containerLibDir   = new File(containerHome + "/.local/lib");
+        File containerLayerDir = new File(containerHome + "/.local/share/vulkan/implicit_layer.d");
+        File manifestFile      = new File(containerLayerDir, "VkLayer_LS_frame_generation.json");
+        File soDestFile        = new File(containerLibDir, "liblsfg-vk-layer.so");
+
+        if (!enabled) {
+            if (manifestFile.exists()) { manifestFile.delete(); }
+            return;
+        }
+
+        String dllPath = preferences.getString("lsfg_dll_path", "");
+        if (dllPath == null || dllPath.isEmpty() || !new File(dllPath).isFile()) {
+            Log.w("XServerDisplayActivity", "LSFG enabled but no Lossless.dll found");
+            if (manifestFile.exists()) manifestFile.delete();
+            return;
+        }
+
+        String installedVersion = container != null ? container.getExtra("lsfgRuntimeVersion", "0") : "0";
+        boolean needsInstall = !soDestFile.exists() || !Integer.toString(LSFG_RUNTIME_VERSION).equals(installedVersion);
+
+        if (needsInstall) {
+            containerLibDir.mkdirs();
+            if (!copyLsfgSoFromAssets(soDestFile)) {
+                if (manifestFile.exists()) manifestFile.delete();
+                return;
+            }
+            if (container != null) {
+                container.putExtra("lsfgRuntimeVersion", Integer.toString(LSFG_RUNTIME_VERSION));
+                container.saveData();
+            }
+        }
+
+        if (!soDestFile.exists()) {
+            if (manifestFile.exists()) manifestFile.delete();
+            return;
+        }
+
+        containerLayerDir.mkdirs();
+        writeLsfgLayerManifest(manifestFile);
+        new File(containerHome + "/.config/lsfg-vk").mkdirs();
+        new File(containerHome + "/.local/share/lsfg-vk").mkdirs();
+        Log.d("XServerDisplayActivity", "LSFG runtime prepared");
+    }
+
+    private void writeLsfgLayerManifest(File manifestFile) {
+        String manifest = "{\n" +
+                "  \"file_format_version\": \"1.0.0\",\n" +
+                "  \"layer\": {\n" +
+                "    \"name\": \"VK_LAYER_LS_frame_generation\",\n" +
+                "    \"type\": \"GLOBAL\",\n" +
+                "    \"api_version\": \"1.4.313\",\n" +
+                "    \"library_path\": \"../../../lib/liblsfg-vk-layer.so\",\n" +
+                "    \"implementation_version\": \"1\",\n" +
+                "    \"description\": \"Lossless Scaling frame generation layer\",\n" +
+                "    \"functions\": {\n" +
+                "      \"vkGetInstanceProcAddr\": \"layer_vkGetInstanceProcAddr\",\n" +
+                "      \"vkGetDeviceProcAddr\": \"layer_vkGetDeviceProcAddr\"\n" +
+                "    },\n" +
+                "    \"disable_environment\": {\n" +
+                "      \"DISABLE_LSFG\": \"1\"\n" +
+                "    }\n" +
+                "  }\n" +
+                "}\n";
+        com.winlator.cmod.shared.io.FileUtils.writeString(manifestFile, manifest);
+    }
+
+    private boolean copyLsfgSoFromAssets(File destFile) {
+        try (java.io.InputStream is = getAssets().open("lsfg_vk/android_arm64_v8a/liblsfg-vk-layer.so");
+             java.io.FileOutputStream fos = new java.io.FileOutputStream(destFile)) {
+            byte[] buf = new byte[8192];
+            int len;
+            while ((len = is.read(buf)) != -1) fos.write(buf, 0, len);
+            destFile.setExecutable(true, false);
+            return true;
+        } catch (Exception e) {
+            Log.e("XServerDisplayActivity", "Failed to copy liblsfg-vk-layer.so", e);
+            return false;
+        }
+    }
+
+    private void updateLsfgConfig() {
+        if (imageFs == null) return;
+        String containerHome = imageFs.getRootDir().getPath() + "/home/xuser";
+        File confToml = new File(containerHome + "/.config/lsfg-vk/conf.toml");
+        if (!confToml.exists()) return;
+
+        String dllPath = preferences.getString("lsfg_dll_path", "");
+        if (dllPath == null || dllPath.isEmpty()) return;
+
+        int multiplier = Math.max(2, Math.min(4, preferences.getInt("lsfg_multiplier", 2)));
+        float flowScaleF = Math.max(0.25f, Math.min(1.0f, preferences.getFloat("lsfg_flow_scale", 0.80f)));
+        String flowScale = String.format(java.util.Locale.US, "%.2f", flowScaleF);
+        boolean perfMode = preferences.getBoolean("lsfg_performance_mode", true);
+        boolean hdrMode  = preferences.getBoolean("lsfg_hdr_mode", false);
+        String presentMode;
+        String prefPresent = preferences.getString("lsfg_present_mode", "fifo");
+        switch (prefPresent != null ? prefPresent.toLowerCase(java.util.Locale.ROOT) : "fifo") {
+            case "mailbox":   presentMode = "mailbox";   break;
+            case "immediate": presentMode = "immediate"; break;
+            default:          presentMode = "fifo";      break;
+        }
+
+        String processName = "";
+        if (guestProgramLauncherComponent != null) {
+            String exe = guestProgramLauncherComponent.getGuestExecutable();
+            if (exe != null && !exe.isEmpty()) {
+                String[] parts = exe.split("\\s+");
+                for (int i = parts.length - 1; i >= 0; i--) {
+                    if (parts[i].toLowerCase(java.util.Locale.ROOT).endsWith(".exe")) {
+                        processName = new File(parts[i].replace("\\", "/")).getName();
+                        break;
+                    }
+                }
+            }
+        }
+
+        StringBuilder toml = new StringBuilder();
+        toml.append("version = 1\n[global]\n");
+        toml.append("dll_path = \"").append(dllPath.replace("\\", "\\\\")).append("\"\n\n");
+        if (!processName.isEmpty()) {
+            toml.append("[[game]]\n");
+            toml.append("exe = \"").append(processName).append("\"\n");
+            toml.append("multiplier = ").append(multiplier).append("\n");
+            toml.append("flow_scale = ").append(flowScale).append("\n");
+            toml.append("performance_mode = ").append(perfMode ? "true" : "false").append("\n");
+            toml.append("hdr_mode = ").append(hdrMode ? "true" : "false").append("\n");
+            toml.append("present_mode = \"").append(presentMode).append("\"\n");
+        }
+        com.winlator.cmod.shared.io.FileUtils.writeString(confToml, toml.toString());
+        Log.d("XServerDisplayActivity", "LSFG config updated: mult=" + multiplier + " flow=" + flowScale);
+    }
+
     private void normalizeSyncEnvVars(com.winlator.cmod.runtime.wine.EnvVars envVars) {
         boolean esyncExplicit = "1".equals(envVars.get("WINEESYNC"));
         boolean ntSyncExplicit = "1".equals(envVars.get("WINENTSYNC"))
