@@ -6538,12 +6538,28 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     }
 
     private void writeLsfgLayerManifest(File manifestFile) {
+        // Tentukan api_version dari graphicsDriverConfig (vulkanVersion dari GameSettings)
+        // Format: "1.3" atau "1.4" → tambah ".0" → "1.3.0" / "1.4.0"
+        // Fallback ke "1.3.0" jika graphicsDriverConfig belum tersedia
+        String apiVersion = "1.3.0";
+        if (graphicsDriverConfig != null) {
+            String vkVer = graphicsDriverConfig.get("vulkanVersion");
+            if (vkVer != null && !vkVer.isEmpty()) {
+                String[] parts = vkVer.split("\\.");
+                if (parts.length == 2) {
+                    apiVersion = vkVer + ".0";  // "1.3" → "1.3.0"
+                } else if (parts.length >= 3) {
+                    apiVersion = vkVer;         // "1.3.xxx" sudah lengkap
+                }
+            }
+        }
+        Log.d("XServerDisplayActivity", "LSFG manifest api_version=" + apiVersion);
         String manifest = "{\n" +
                 "  \"file_format_version\": \"1.0.0\",\n" +
                 "  \"layer\": {\n" +
                 "    \"name\": \"VK_LAYER_LS_frame_generation\",\n" +
                 "    \"type\": \"GLOBAL\",\n" +
-                "    \"api_version\": \"1.4.313\",\n" +
+                "    \"api_version\": \"" + apiVersion + "\",\n" +
                 "    \"library_path\": \"../../../lib/liblsfg-vk-layer.so\",\n" +
                 "    \"implementation_version\": \"1\",\n" +
                 "    \"description\": \"Lossless Scaling frame generation layer\",\n" +
