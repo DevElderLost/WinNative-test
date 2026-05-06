@@ -302,7 +302,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     private int colorProfile = 0;
 
     // LSFG
-    private static final int LSFG_RUNTIME_VERSION = 2;
+    private static final int LSFG_RUNTIME_VERSION = 3;
     private boolean gyroscopeCardExpanded = false;
     private XServerDrawerStateHolder drawerStateHolder;
     private XServerDrawerActionListener drawerActionListener;
