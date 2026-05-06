@@ -1109,8 +1109,11 @@ private fun LsfgToggleCard(
 ) {
     val hasFile = dllPath.isNotBlank()
     // Selalu tampilkan "Lossless.dll" — bukan full path
-    val displayName = "Lossless.dll"
-
+    val rawFileName = dllPath.substringAfterLast('/').substringAfterLast('\\')
+    val displayName = rawFileName
+    .replaceFirst(Regex("^global-\\d+-"), "")
+    .ifBlank { "Lossless.dll" }
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
