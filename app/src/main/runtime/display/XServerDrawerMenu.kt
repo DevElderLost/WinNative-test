@@ -324,6 +324,7 @@ class XServerDrawerStateHolder(
 ) {
     var state by mutableStateOf(initialState, neverEqualPolicy())
     var taskManagerState by mutableStateOf(TaskManagerPaneState(), neverEqualPolicy())
+    var logsState by mutableStateOf(false)
     private var drawerOpen by mutableStateOf(false)
     internal var openPane by mutableStateOf<DrawerPane?>(null)
     private var paneVisibilityListener: ((Boolean) -> Unit)? = null
@@ -707,6 +708,7 @@ fun setupXServerDrawerComposeView(
 internal fun XServerDrawerContent(
     state: XServerDrawerState,
     taskManagerState: TaskManagerPaneState,
+    logsState: Boolean = false,
     openPane: DrawerPane?,
     onOpenPaneChange: (DrawerPane?) -> Unit,
     listener: XServerDrawerActionListener,

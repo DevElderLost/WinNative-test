@@ -3250,6 +3250,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
 
         if (drawerStateHolder == null) {
             drawerStateHolder = new XServerDrawerStateHolder(state);
+            drawerStateHolder.setLogsState(enableLogsMenu);
             XServerDisplayHostKt.setupXServerDisplayHost(
                     displayHostComposeView,
                     xServerDisplayFrame,
@@ -3299,6 +3300,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         }
 
         drawerStateHolder.setState(state);
+        drawerStateHolder.setLogsState(enableLogsMenu);
     }
 
     private void startTaskManagerPolling() {
