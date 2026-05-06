@@ -53,6 +53,15 @@ class OtherSettingsFragment : Fragment() {
             installSoundFont(uri)
         }
 
+    // LSFG — import Lossless.dll secara global (berlaku untuk semua game)
+    private val lsfgDllPickerLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.OpenDocument(),
+        ) { uri: Uri? ->
+            if (uri == null) return@registerForActivityResult
+            importLsfgDll(uri)
+        }
+
     override fun onViewCreated(
         view: View,
         savedInstanceState: Bundle?,
@@ -168,6 +177,12 @@ class OtherSettingsFragment : Fragment() {
                             startActivity(SetupWizardActivity.createManualRerunIntent(ctx))
                         },
                         onReinstallImagefs = { startImagefsReinstall() },
+                        onImportLsfgDll = { lsfgDllPickerLauncher.launch(arrayOf("*/*")) },
+                        onClearLsfgDll = { clearLsfgDll() },
+                        onLsfgEnabledChanged = { enabled ->
+                            preferences.edit { putBoolean("lsfg_enabled", enabled) }
+                            refresh()
+                        },
                     )
                 }
             }
@@ -229,6 +244,8 @@ class OtherSettingsFragment : Fragment() {
                 openInBrowser = preferences.getBoolean("open_with_android_browser", false),
                 shareClipboard = preferences.getBoolean("share_android_clipboard", false),
                 imagefsInstallProgress = uiState.imagefsInstallProgress,
+                lsfgDllPath = preferences.getString("lsfg_dll_path", "") ?: "",
+                lsfgEnabled = preferences.getBoolean("lsfg_enabled", false),
             )
     }
 
@@ -344,6 +361,58 @@ class OtherSettingsFragment : Fragment() {
             } else {
                 AppUtils.showToast(ctx, R.string.settings_audio_sound_font_removed_failed)
             }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // LSFG DLL Management (global — berlaku untuk semua game)
+    // ------------------------------------------------------------------
+
+    private fun importLsfgDll(uri: Uri) {
+        val ctx = context ?: return
+        val rawFileName = uri.lastPathSegment?.substringAfterLast('/') ?: "Lossless.dll"
+        val safeFileName = rawFileName.filter { it.isLetterOrDigit() || it == '.' || it == '_' || it == '-' }
+        if (!safeFileName.endsWith(".dll", ignoreCase = true)) {
+            com.winlator.cmod.shared.android.AppUtils.showToast(
+                ctx, R.string.settings_lsfg_select_valid_dll, android.widget.Toast.LENGTH_SHORT
+            )
+            return
+        }
+        val lsfgDir = File(ctx.filesDir, "lsfg")
+        if (!lsfgDir.exists()) lsfgDir.mkdirs()
+        val outputFile = File(lsfgDir, "global-${System.currentTimeMillis()}-$safeFileName")
+        try {
+            ctx.contentResolver.openInputStream(uri)?.use { input ->
+                outputFile.outputStream().use { output -> input.copyTo(output) }
+            }
+        } catch (e: Exception) {
+            com.winlator.cmod.shared.android.AppUtils.showToast(
+                ctx, R.string.settings_lsfg_import_failed, android.widget.Toast.LENGTH_SHORT
+            )
+            return
+        }
+        // Hapus DLL lama jika ada
+        val oldPath = preferences.getString("lsfg_dll_path", "") ?: ""
+        clearManagedLsfgDll(oldPath)
+        preferences.edit {
+            putString("lsfg_dll_path", outputFile.absolutePath)
+        }
+        refresh()
+    }
+
+    private fun clearLsfgDll() {
+        val path = preferences.getString("lsfg_dll_path", "") ?: ""
+        clearManagedLsfgDll(path)
+        preferences.edit { remove("lsfg_dll_path") }
+        refresh()
+    }
+
+    private fun clearManagedLsfgDll(path: String) {
+        if (path.isBlank()) return
+        val lsfgDir = File(requireContext().filesDir, "lsfg")
+        val file = File(path)
+        if (file.parentFile?.absolutePath == lsfgDir.absolutePath && file.exists()) {
+            file.delete()
         }
     }
 
