@@ -332,14 +332,6 @@ class ShortcutSettingsComposeDialog private constructor(
                     }
                 }
             }
-
-            override fun onImportLsfgDll() {
-                // DLL dikelola global via OtherSettingsFragment — tidak ada aksi di sini
-            }
-
-            override fun onClearLsfgDll() {
-                // DLL dikelola global via OtherSettingsFragment — tidak ada aksi di sini
-            }
         }
     }
 
