@@ -1199,4 +1199,9 @@ Installed path:
     <string name="preloader_platform_gog">GOG</string>
     <string name="preloader_platform_custom">Custom Game</string>
 
+    <!-- LSFG Legacy Mode -->
+<string name="settings_lsfg_legacy_mode">Legacy Mode</string>
+<string name="settings_lsfg_legacy_mode_summary">Enable Lsfg Legacy Mode, settings controlled per-shortcut</string>
+<string name="settings_lsfg_legacy_mode_required">Enable Legacy Mode in Other Settings to configure LSFG per shortcut</string>
+
 </resources>
