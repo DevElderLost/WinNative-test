@@ -332,6 +332,14 @@ class ShortcutSettingsComposeDialog private constructor(
                     }
                 }
             }
+
+            override fun onImportLsfgDll() {
+                // DLL dikelola global via OtherSettingsFragment — tidak ada aksi di sini
+            }
+
+            override fun onClearLsfgDll() {
+                // DLL dikelola global via OtherSettingsFragment — tidak ada aksi di sini
+            }
         }
     }
 
@@ -460,6 +468,20 @@ class ShortcutSettingsComposeDialog private constructor(
         // FPS Limit
         val savedFpsLimit = shortcut.getExtra("fpsLimit", "0")
         state.fpsLimit.intValue = savedFpsLimit.toIntOrNull() ?: 0
+
+        // LSFG
+        state.lsfgEnabled.value = shortcut.getExtra("lsfgEnabled", "0") == "1"
+        val lsfgMultiplier = shortcut.getExtra("lsfgMultiplier", "2").toIntOrNull() ?: 2
+        state.lsfgSelectedMultiplier.intValue = (lsfgMultiplier - 2).coerceIn(0, 2)
+        val flowScale = shortcut.getExtra("lsfgFlowScale", "0.80").toFloatOrNull() ?: 0.80f
+        state.lsfgFlowScale.intValue = (flowScale * 100f).toInt().coerceIn(25, 100)
+        state.lsfgPerformanceMode.value = shortcut.getExtra("lsfgPerformanceMode", "1") == "1"
+        state.lsfgHdrMode.value = shortcut.getExtra("lsfgHdrMode", "0") == "1"
+        when (shortcut.getExtra("lsfgPresentMode", "fifo").lowercase(Locale.ROOT)) {
+            "mailbox"   -> state.lsfgSelectedPresentMode.intValue = 1
+            "immediate" -> state.lsfgSelectedPresentMode.intValue = 2
+            else        -> state.lsfgSelectedPresentMode.intValue = 0
+        }
 
         // Graphics driver (basic entries - will be updated after contents sync)
         val graphicsDriverArr =
@@ -1191,6 +1213,25 @@ class ShortcutSettingsComposeDialog private constructor(
             // FPS Limit
             val fpsLimit = state.fpsLimit.intValue
             shortcut.putExtra("fpsLimit", if (fpsLimit > 0) fpsLimit.toString() else null)
+
+            // LSFG
+            shortcut.putExtra("lsfgEnabled", if (state.lsfgEnabled.value) "1" else null)
+            shortcut.putExtra(
+                "lsfgMultiplier",
+                ((state.lsfgSelectedMultiplier.intValue + 2).coerceIn(2, 4)).toString()
+            )
+            shortcut.putExtra(
+                "lsfgFlowScale",
+                String.format(Locale.US, "%.2f", state.lsfgFlowScale.intValue.coerceIn(25, 100) / 100f)
+            )
+            shortcut.putExtra("lsfgPerformanceMode", if (state.lsfgPerformanceMode.value) "1" else "0")
+            shortcut.putExtra("lsfgHdrMode", if (state.lsfgHdrMode.value) "1" else "0")
+            val lsfgPresentMode = when (state.lsfgSelectedPresentMode.intValue) {
+                1    -> "mailbox"
+                2    -> "immediate"
+                else -> "fifo"
+            }
+            shortcut.putExtra("lsfgPresentMode", lsfgPresentMode)
 
             // Desktop Theme — stored as compound "THEME,TYPE,COLOR" string
             if (state.desktopThemeEntries.value.isNotEmpty()) {
