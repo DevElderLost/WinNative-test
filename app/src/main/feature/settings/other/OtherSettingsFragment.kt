@@ -180,7 +180,12 @@ class OtherSettingsFragment : Fragment() {
                         onImportLsfgDll = { lsfgDllPickerLauncher.launch(arrayOf("*/*")) },
                         onClearLsfgDll = { clearLsfgDll() },
                         onLsfgEnabledChanged = { enabled ->
-                            preferences.edit { putBoolean("lsfg_enabled", enabled) }
+                            preferences.edit {
+                                putBoolean("lsfg_enabled", enabled)
+                                // Jika LSFG dinonaktifkan, legacy mode otomatis dinonaktifkan
+                                // agar LsfgSection di GameSettings ikut tersembunyi
+                                if (!enabled) putBoolean("lsfg_legacy_mode", false)
+                            }
                             refresh()
                         },
                         onLsfgLegacyModeChanged = { legacy ->
