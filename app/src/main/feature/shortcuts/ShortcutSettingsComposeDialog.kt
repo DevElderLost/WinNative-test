@@ -463,7 +463,7 @@ class ShortcutSettingsComposeDialog private constructor(
         state.fpsLimit.intValue = savedFpsLimit.toIntOrNull() ?: 0
 
         // LSFG
-        state.lsfgEnabled.value = shortcut.getExtra("lsfgEnabled", "0") == "1"
+        //state.lsfgEnabled.value = shortcut.getExtra("lsfgEnabled", "0") == "1"
         val lsfgMultiplier = shortcut.getExtra("lsfgMultiplier", "2").toIntOrNull() ?: 2
         state.lsfgSelectedMultiplier.intValue = (lsfgMultiplier - 2).coerceIn(0, 2)
         val flowScale = shortcut.getExtra("lsfgFlowScale", "0.80").toFloatOrNull() ?: 0.80f
@@ -1210,7 +1210,7 @@ class ShortcutSettingsComposeDialog private constructor(
             shortcut.putExtra("fpsLimit", if (fpsLimit > 0) fpsLimit.toString() else null)
 
             // LSFG
-            shortcut.putExtra("lsfgEnabled", if (state.lsfgEnabled.value) "1" else null)
+            //shortcut.putExtra("lsfgEnabled", if (state.lsfgEnabled.value) "1" else null)
             shortcut.putExtra(
                 "lsfgMultiplier",
                 ((state.lsfgSelectedMultiplier.intValue + 2).coerceIn(2, 4)).toString()
