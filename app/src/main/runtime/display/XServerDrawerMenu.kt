@@ -96,6 +96,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -313,6 +314,14 @@ data class XServerDrawerState(
     val fsrMode: Int = 0,
     val fsrSharpness: Int = 100,
     val colorProfile: Int = 0,
+    // LSFG
+    val lsfgEnabled: Boolean = false,
+    val lsfgMultiplier: Int = 2,
+    val lsfgFlowScale: Float = 0.80f,
+    val lsfgPerformanceMode: Boolean = true,
+    val lsfgHdrMode: Boolean = false,
+    val lsfgPresentModeIndex: Int = 0,
+    val lsfgDllPath: String = "",
     val inputControlsProfileNames: List<String> = emptyList(),
     val inputControlsSelectedProfileIndex: Int = 0,
     val inputControlsShowOverlay: Boolean = false,
@@ -320,6 +329,7 @@ data class XServerDrawerState(
     val inputControlsOverlayOpacity: Float = 0.4f,
     val inputControlsTouchscreenHaptics: Boolean = false,
     val inputControlsGamepadVibration: Boolean = true,
+    val simulatedTouchEnabled: Boolean = false,
 )
 
 class XServerDrawerStateHolder(
@@ -487,6 +497,13 @@ interface XServerDrawerActionListener {
 
     fun onColorProfileSelected(profile: Int)
 
+    // LSFG
+    fun onLsfgMultiplierChanged(multiplier: Int)
+    fun onLsfgFlowScaleChanged(scale: Float)
+    fun onLsfgPerformanceModeChanged(enabled: Boolean)
+    fun onLsfgHdrModeChanged(enabled: Boolean)
+    fun onLsfgPresentModeSelected(index: Int)
+
     fun onInputControlsProfileSelected(index: Int)
 
     fun onInputControlsShowOverlayChanged(enabled: Boolean)
@@ -498,6 +515,8 @@ interface XServerDrawerActionListener {
     fun onInputControlsTouchscreenHapticsChanged(enabled: Boolean)
 
     fun onInputControlsGamepadVibrationChanged(enabled: Boolean)
+
+    fun onSimulatedTouchChanged(enabled: Boolean)
 
     fun onInputControlsEditClick()
 
@@ -556,6 +575,13 @@ fun buildXServerDrawerState(
     fsrMode: Int = 0,
     fsrSharpness: Int = 100,
     colorProfile: Int = 0,
+    lsfgEnabled: Boolean = false,
+    lsfgMultiplier: Int = 2,
+    lsfgFlowScale: Float = 0.80f,
+    lsfgPerformanceMode: Boolean = true,
+    lsfgHdrMode: Boolean = false,
+    lsfgPresentModeIndex: Int = 0,
+    lsfgDllPath: String = "",
     inputControlsProfileNames: List<String> = emptyList(),
     inputControlsSelectedProfileIndex: Int = 0,
     inputControlsShowOverlay: Boolean = false,
@@ -564,6 +590,7 @@ fun buildXServerDrawerState(
     inputControlsTouchscreenHaptics: Boolean = false,
     inputControlsGamepadVibration: Boolean = true,
     fullscreenEnabled: Boolean = false,
+    simulatedTouchEnabled: Boolean = false,
 ): XServerDrawerState {
     val items =
         mutableListOf(
@@ -610,6 +637,14 @@ fun buildXServerDrawerState(
                     if (mouseDisabled) context.getString(R.string.common_ui_disabled) else context.getString(R.string.common_ui_enabled),
                 icon = Icons.Outlined.Mouse,
                 active = !mouseDisabled,
+            ),
+            XServerDrawerItem(
+                itemId = R.id.main_menu_simulated_touch,
+                title = context.getString(R.string.session_drawer_simulated_touch),
+                subtitle =
+                    if (simulatedTouchEnabled) context.getString(R.string.common_ui_enabled) else context.getString(R.string.common_ui_disabled),
+                icon = Icons.Outlined.Apps,
+                active = simulatedTouchEnabled,
             ),
             XServerDrawerItem(
                 itemId = R.id.main_menu_toggle_fullscreen,
@@ -711,6 +746,13 @@ fun buildXServerDrawerState(
         fsrMode = fsrMode,
         fsrSharpness = fsrSharpness,
         colorProfile = colorProfile,
+        lsfgEnabled = lsfgEnabled,
+        lsfgMultiplier = lsfgMultiplier,
+        lsfgFlowScale = lsfgFlowScale,
+        lsfgPerformanceMode = lsfgPerformanceMode,
+        lsfgHdrMode = lsfgHdrMode,
+        lsfgPresentModeIndex = lsfgPresentModeIndex,
+        lsfgDllPath = lsfgDllPath,
         inputControlsProfileNames = inputControlsProfileNames,
         inputControlsSelectedProfileIndex = inputControlsSelectedProfileIndex,
         inputControlsShowOverlay = inputControlsShowOverlay,
@@ -718,6 +760,7 @@ fun buildXServerDrawerState(
         inputControlsOverlayOpacity = inputControlsOverlayOpacity,
         inputControlsTouchscreenHaptics = inputControlsTouchscreenHaptics,
         inputControlsGamepadVibration = inputControlsGamepadVibration,
+        simulatedTouchEnabled = simulatedTouchEnabled,
     )
 }
 
@@ -1131,6 +1174,7 @@ private fun ActionCardGrid(
                             R.id.main_menu_logs -> onOpenLogs()
                             R.id.main_menu_relative_mouse_movement,
                             R.id.main_menu_disable_mouse,
+                            R.id.main_menu_simulated_touch,
                             R.id.main_menu_toggle_fullscreen -> listener.onActionSelected(item.itemId)
                             else -> listener.onActionSelected(item.itemId)
                         }
@@ -1399,6 +1443,7 @@ private fun railLabelResFor(itemId: Int): Int? =
         R.id.main_menu_input_controls -> R.string.session_drawer_rail_label_input_controls
         R.id.main_menu_relative_mouse_movement -> R.string.session_drawer_rail_label_relative_mouse
         R.id.main_menu_disable_mouse -> R.string.session_drawer_rail_label_mouse
+        R.id.main_menu_simulated_touch -> R.string.session_drawer_rail_label_simulated_touch
         R.id.main_menu_toggle_fullscreen -> R.string.session_drawer_rail_label_fullscreen
         R.id.main_menu_pip_mode -> R.string.session_drawer_rail_label_pip
         R.id.main_menu_native_rendering -> R.string.session_drawer_rail_label_native
@@ -2017,11 +2062,106 @@ private fun ScreenEffectsPaneContent(
                     }
                 }
             }
+
+            // LSFG — hanya tampil jika aktif dan DLL sudah diimport
+            if (state.lsfgEnabled && state.lsfgDllPath.isNotBlank()) {
+                HorizontalDivider(
+                    color = DrawerOutline,
+                    thickness = 1.dp,
+                    modifier = Modifier.padding(vertical = (4f * paneScale).dp),
+                )
+                LsfgInlineSettings(state = state, listener = listener, paneScale = paneScale)
+            }
             }
         }
     }
 }
 
+
+// ====================== LSFG Inline (inside Screen Effects pane) ======================
+@Composable
+private fun LsfgInlineSettings(
+    state: XServerDrawerState,
+    listener: XServerDrawerActionListener,
+    paneScale: Float = 1f,
+) {
+    val multiplierOptions = listOf("2x", "3x", "4x")
+    val presentModeOptions = listOf("FIFO", "Mailbox", "Immediate")
+
+    Column(verticalArrangement = Arrangement.spacedBy((10f * paneScale).dp)) {
+        // Header — text label saja
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy((6f * paneScale).dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Tune,
+                contentDescription = null,
+                tint = DrawerAccent,
+                modifier = Modifier.size((14f * paneScale).dp),
+            )
+            Text(
+                text = "Lossless Scaling FG",
+                color = DrawerTextPrimary,
+                fontSize = (13f * paneScale).sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+
+        // Multiplier chips
+        Column(verticalArrangement = Arrangement.spacedBy((6f * paneScale).dp)) {
+            PaneSectionLabel(stringResource(R.string.settings_lsfg_multiplier))
+            ChipFlow {
+                multiplierOptions.forEachIndexed { idx, label ->
+                    HUDToggleChip(
+                        label = label,
+                        checked = state.lsfgMultiplier == (idx + 2),
+                        onClick = { listener.onLsfgMultiplierChanged(idx + 2) },
+                    )
+                }
+            }
+        }
+
+        // Flow Scale slider
+        DrawerSliderRow(
+            label = stringResource(R.string.settings_lsfg_flow_scale),
+            valueText = "${(state.lsfgFlowScale * 100).toInt()}%",
+            value = state.lsfgFlowScale,
+            valueRange = 0.25f..1.0f,
+            steps = 14,
+            onValueChange = { listener.onLsfgFlowScaleChanged(it) },
+        )
+
+        // Performance Mode
+        DrawerBooleanRow(
+            title = stringResource(R.string.settings_lsfg_performance_mode),
+            checked = state.lsfgPerformanceMode,
+            onCheckedChange = { listener.onLsfgPerformanceModeChanged(it) },
+        )
+
+        // HDR Mode
+        DrawerBooleanRow(
+            title = stringResource(R.string.settings_lsfg_hdr_mode),
+            checked = state.lsfgHdrMode,
+            onCheckedChange = { listener.onLsfgHdrModeChanged(it) },
+        )
+
+        // Present Mode chips
+        Column(verticalArrangement = Arrangement.spacedBy((6f * paneScale).dp)) {
+            PaneSectionLabel(stringResource(R.string.settings_lsfg_present_mode))
+            ChipFlow {
+                presentModeOptions.forEachIndexed { idx, label ->
+                    HUDToggleChip(
+                        label = label,
+                        checked = state.lsfgPresentModeIndex == idx,
+                        onClick = { listener.onLsfgPresentModeSelected(idx) },
+                    )
+                }
+            }
+        }
+    }
+}
+// ====================== end LSFG ======================
 
 @Composable
 private fun TaskManagerPaneContent(

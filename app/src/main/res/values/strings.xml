@@ -38,6 +38,18 @@
     <string name="common_ui_force">Force</string>
     <string name="common_ui_version">Version</string>
     <string name="common_ui_advanced">Advanced</string>
+    <string name="settings_lsfg_title">LSFG</string>
+    <string name="settings_lsfg_enable">Enable LSFG</string>
+    <string name="settings_lsfg_lossless_dll">Lossless.dll</string>
+    <string name="settings_lsfg_no_dll_imported">No DLL imported</string>
+    <string name="settings_lsfg_frame_generation">Frame Generation</string>
+    <string name="settings_lsfg_multiplier">Multiplier</string>
+    <string name="settings_lsfg_flow_scale">Flow Scale</string>
+    <string name="settings_lsfg_performance_mode">Performance Mode</string>
+    <string name="settings_lsfg_hdr_mode">HDR Mode</string>
+    <string name="settings_lsfg_present_mode">Present Mode</string>
+    <string name="settings_lsfg_select_valid_dll">Select a .dll file</string>
+    <string name="settings_lsfg_import_failed">Unable to import DLL</string>    
     <string name="common_ui_graphics">Graphics</string>
     <string name="common_ui_system">System</string>
     <string name="common_ui_width">Width</string>
@@ -615,6 +627,8 @@ E.g. <b>META</b> for <i>META key</i>, \n
     <string name="session_drawer_pause_resume">Pause/Resume</string>
     <string name="session_drawer_relative_mouse_movement">Relative Mouse Movement</string>
     <string name="session_drawer_mouse_input">Mouse Input</string>
+    <string name="session_drawer_simulated_touch">Simulated Touch</string>
+    <string name="session_drawer_rail_label_simulated_touch">Sim Touch</string>
     <string name="session_drawer_screen_effects">Screen Effects</string>
     <string name="session_drawer_screen_effects_subtitle">Upscaling and color effects</string>
     <string name="session_drawer_super_resolution">Sharpening Filters</string>

@@ -66,6 +66,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,6 +83,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.material3.HorizontalDivider
 import com.winlator.cmod.R
 import com.winlator.cmod.shared.ui.outlinedSwitchColors
 
@@ -114,6 +122,9 @@ data class OtherSettingsState(
     val openInBrowser: Boolean = false,
     val shareClipboard: Boolean = false,
     val imagefsInstallProgress: Int? = null,
+    // LSFG
+    val lsfgEnabled: Boolean = false,
+    val lsfgDllPath: String = "",
 )
 
 @Composable
@@ -156,6 +167,9 @@ fun OtherSettingsScreen(
     onShareClipboardChanged: (Boolean) -> Unit,
     onRunSetupWizard: () -> Unit,
     onReinstallImagefs: () -> Unit,
+    onImportLsfgDll: () -> Unit = {},
+    onClearLsfgDll: () -> Unit = {},
+    onLsfgEnabledChanged: (Boolean) -> Unit = {},
 ) {
     var showReinstallDialog by remember { mutableStateOf(false) }
     val layoutDirection = LocalLayoutDirection.current
@@ -321,6 +335,23 @@ fun OtherSettingsScreen(
                 icon = Icons.Outlined.ContentCopy,
                 checked = state.shareClipboard,
                 onCheckedChange = onShareClipboardChanged,
+            )
+        }
+
+        item(key = "lsfg_section") {
+            SectionLabel(
+                stringResource(R.string.settings_lsfg_title),
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+
+        item(key = "lsfg_toggle_card") {
+            LsfgToggleCard(
+                enabled = state.lsfgEnabled,
+                dllPath = state.lsfgDllPath,
+                onEnabledChanged = onLsfgEnabledChanged,
+                onImport = onImportLsfgDll,
+                onClear = onClearLsfgDll,
             )
         }
 
@@ -1063,6 +1094,136 @@ private fun ImagefsInstallProgressDialog(percent: Int) {
                     gapSize = 0.dp,
                     drawStopIndicator = {},
                 )
+            }
+        }
+    }
+}
+
+// LSFG toggle card — switch enable/disable + expand import DLL
+@Composable
+private fun LsfgToggleCard(
+    enabled: Boolean,
+    dllPath: String,
+    onEnabledChanged: (Boolean) -> Unit,
+    onImport: () -> Unit,
+    onClear: () -> Unit,
+) {
+    // rememberUpdatedState memastikan nilai terbaru selalu terbaca di dalam
+    // AnimatedVisibility — tanpa ini konten animasi pakai snapshot state lama
+    // saat toggle diubah, sehingga nama DLL berbeda antara switch row dan import row.
+    val currentDllPath by rememberUpdatedState(dllPath)
+    val hasFile = currentDllPath.isNotBlank()
+    val displayName = if (hasFile)
+        currentDllPath.substringAfterLast('/').substringAfterLast('\\')
+            .replaceFirst(Regex("^.*?-\\d{10,}-"), "")
+            .ifBlank { currentDllPath.substringAfterLast('/').substringAfterLast('\\') }
+    else ""
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(CardDark)
+            .border(1.dp, CardBorder, RoundedCornerShape(12.dp)),
+    ) {
+        // Row utama — toggle switch
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(if (enabled) Accent.copy(alpha = 0.15f) else IconBoxBg),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Speed,
+                    contentDescription = null,
+                    tint = if (enabled) Accent else TextSecondary,
+                    modifier = Modifier.size(17.dp),
+                )
+            }
+            Spacer(Modifier.width(13.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Lossless Scaling FG",
+                    color = TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    text = if (enabled)
+                        if (hasFile) displayName
+                        else stringResource(R.string.settings_lsfg_no_dll_imported)
+                    else stringResource(R.string.common_ui_disabled),
+                    color = if (enabled && hasFile) Accent else TextSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = onEnabledChanged,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = Accent,
+                    uncheckedThumbColor = TextSecondary,
+                    uncheckedTrackColor = CardBorder,
+                ),
+            )
+        }
+
+        // Import DLL row — hanya muncul jika enabled
+        AnimatedVisibility(
+            visible = enabled,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+        ) {
+            Column {
+                HorizontalDivider(color = CardBorder, thickness = 1.dp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_lsfg_lossless_dll),
+                            color = TextPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(
+                            text = if (hasFile) displayName
+                                   else stringResource(R.string.settings_lsfg_no_dll_imported),
+                            color = if (hasFile) Accent else TextSecondary,
+                            fontSize = 11.sp,
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    SmallActionButton(
+                        label = stringResource(
+                            if (hasFile) R.string.common_ui_change
+                            else R.string.common_ui_import
+                        ),
+                        textColor = Accent,
+                        onClick = onImport,
+                    )
+                    if (hasFile) {
+                        Spacer(Modifier.width(6.dp))
+                        SmallActionButton(
+                            label = stringResource(R.string.common_ui_remove),
+                            textColor = Color(0xFFFF5C5C),
+                            onClick = onClear,
+                        )
+                    }
+                }
             }
         }
     }
