@@ -183,6 +183,10 @@ class OtherSettingsFragment : Fragment() {
                             preferences.edit { putBoolean("lsfg_enabled", enabled) }
                             refresh()
                         },
+                        onLsfgLegacyModeChanged = { legacy ->
+                            preferences.edit { putBoolean("lsfg_legacy_mode", legacy) }
+                            refresh()
+                        },
                     )
                 }
             }
@@ -246,6 +250,7 @@ class OtherSettingsFragment : Fragment() {
                 imagefsInstallProgress = uiState.imagefsInstallProgress,
                 lsfgDllPath = preferences.getString("lsfg_dll_path", "") ?: "",
                 lsfgEnabled = preferences.getBoolean("lsfg_enabled", false),
+                lsfgLegacyMode = preferences.getBoolean("lsfg_legacy_mode", false),
             )
     }
 
