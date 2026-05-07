@@ -1041,7 +1041,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     Context context = environment.getContext();
     
     if (imageFs == null) {
-      envVars.put("DISABLE_LSFG", "1");
+      envVars.put("DISABLE_LSFGVK", "1");
       return;
     }
 
@@ -1060,7 +1060,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     File lsfgTmpDir  = new File(containerHome + "/.local/share/lsfg-vk");
 
     if (!enabled || !manifestFile.exists() || !soFile.exists()) {
-      envVars.put("DISABLE_LSFG", "1");
+      envVars.put("DISABLE_LSFGVK", "1");
       Log.d("GuestProgramLauncherComponent", "LSFG disabled:"
           + " enabled=" + enabled
           + " manifest=" + manifestFile.exists()
@@ -1071,7 +1071,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     // DLL path global dari OtherSettingsFragment
     String dllPath = prefs.getString("lsfg_dll_path", "");
     if (dllPath == null || dllPath.isEmpty() || !new java.io.File(dllPath).isFile()) {
-      envVars.put("DISABLE_LSFG", "1");
+      envVars.put("DISABLE_LSFGVK", "1");
       Log.w("GuestProgramLauncherComponent", "LSFG: Lossless.dll not found: " + dllPath);
       return;
     }
@@ -1146,8 +1146,8 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
       envVars.put("VK_LAYER_PATH", containerLayerPath + ":" + existingLayerPath);
     }
 
-    envVars.remove("DISABLE_LSFG");
-    envVars.put("LSFG_CONFIG", confToml.getAbsolutePath());
+    envVars.remove("DISABLE_LSFGVK");
+    envVars.put("LSFGVK_CONFIG", confToml.getAbsolutePath());
     envVars.put("LSFG_LAST_PATH", new java.io.File(lsfgTmpDir, "lsfg-vk_last").getAbsolutePath());
     envVars.put("LSFG_TMP_DIR", lsfgTmpDir.getAbsolutePath());
     envVars.put("LSFG_DLL_PATH", dllPath);
