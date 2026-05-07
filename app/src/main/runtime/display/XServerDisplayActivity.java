@@ -1,7 +1,5 @@
 package com.winlator.cmod.runtime.display;
 
-import static com.winlator.cmod.shared.android.AppUtils.showToast;
-
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -87,6 +85,7 @@ import com.winlator.cmod.runtime.content.ContentsManager;
 import com.winlator.cmod.runtime.content.AdrenotoolsManager;
 import com.winlator.cmod.shared.android.AppUtils;
 import com.winlator.cmod.shared.android.AppTerminationHelper;
+import com.winlator.cmod.shared.ui.toast.WinToast;
 import com.winlator.cmod.runtime.wine.EnvVars;
 import com.winlator.cmod.shared.io.FileUtils;
 import com.winlator.cmod.runtime.system.CPUStatus;
@@ -467,6 +466,22 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         return shortcut != null ? shortcut.getSettingExtra(key, containerValue) : containerValue;
     }
 
+    private boolean getBooleanSessionOption(String key, boolean defaultValue) {
+        boolean fallback = preferences != null ? preferences.getBoolean(key, defaultValue) : defaultValue;
+        if (shortcut == null) return fallback;
+        String rawValue = shortcut.getExtra(key, String.valueOf(fallback));
+        return parseBoolean(rawValue);
+    }
+
+    private void setBooleanSessionOption(String key, boolean value) {
+        if (shortcut != null) {
+            shortcut.putExtra(key, String.valueOf(value));
+            shortcut.saveData();
+        } else if (preferences != null) {
+            preferences.edit().putBoolean(key, value).apply();
+        }
+    }
+
     private String getShortcutWineVersionOverride() {
         if (shortcut == null || shortcutUsesContainerDefaults()) return "";
         return shortcut.getExtra("wineVersion");
@@ -759,7 +774,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                         || (shortcutPath != null && !shortcutPath.isEmpty());
                 if (launchedFromShortcutIdentity) {
                     disableUnavailablePinnedShortcut(containerId, shortcutUuid, shortcutPath, shortcutPathHash);
-                    showToast(this, R.string.shortcuts_list_not_available);
+                    WinToast.show(this, R.string.shortcuts_list_not_available);
                     finish();
                     return;
                 }
@@ -1689,11 +1704,12 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 break;
             case MotionEvent.ACTION_MOVE:
             case MotionEvent.ACTION_HOVER_MOVE:
-                float[] transformedPoint = XForm.transformPoint(xform, event.getX(), event.getY());
+                int[] delta = getCapturedPointerDelta(event);
+                if (delta[0] == 0 && delta[1] == 0) break;
                 if (xServer.isRelativeMouseMovement())
-                    xServer.getWinHandler().mouseEvent(MouseEventFlags.MOVE, (int)transformedPoint[0], (int)transformedPoint[1], 0);
+                    xServer.getWinHandler().mouseEvent(MouseEventFlags.MOVE, delta[0], delta[1], 0);
                 else
-                    xServer.injectPointerMoveDelta((int)transformedPoint[0], (int)transformedPoint[1]);
+                    xServer.injectPointerMoveDelta(delta[0], delta[1]);
                 handled = true;
                 break;
             case MotionEvent.ACTION_SCROLL:
@@ -1716,6 +1732,19 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 handled = true;
                 break;
         }
+    }
+
+    private int[] getCapturedPointerDelta(MotionEvent event) {
+        float dx = event.getAxisValue(MotionEvent.AXIS_RELATIVE_X);
+        float dy = event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y);
+        if (dx == 0.0f && dy == 0.0f) {
+            dx = event.getX();
+            dy = event.getY();
+        }
+        return new int[]{
+                (int)(xform[0] * dx + xform[2] * dy),
+                (int)(xform[1] * dx + xform[3] * dy)
+        };
     }
 
     @Override
@@ -2165,7 +2194,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 XServerDrawerStateHolder holder = drawerStateHolder;
                 List<String> lines = holder != null ? holder.snapshotLogLines() : new ArrayList<>();
                 if (lines.isEmpty()) {
-                    showToast(this, getString(R.string.session_drawer_logs_share_empty));
+                    WinToast.show(this, getString(R.string.session_drawer_logs_share_empty));
                     return;
                 }
                 try (BufferedWriter out = new BufferedWriter(new FileWriter(shareFile))) {
@@ -2186,7 +2215,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             startActivity(Intent.createChooser(shareIntent, getString(R.string.session_drawer_logs_share_chooser)));
         } catch (Exception e) {
             Log.w("XServerLogs", "Failed to share log stream", e);
-            showToast(this, getString(R.string.session_drawer_logs_share_failed));
+            WinToast.show(this, getString(R.string.session_drawer_logs_share_failed));
         }
     }
 
@@ -2935,6 +2964,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     }
 
     private void openDrawerMenu() {
+        releasePointerCapture();
         renderDrawerMenu();
         if (drawerStateHolder != null) {
             drawerStateHolder.openDrawer();
@@ -3337,6 +3367,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
 
                         @Override
                         public void onDrawerOpened() {
+                            releasePointerCapture();
                             renderDrawerMenu();
                             if (displayHostComposeView != null) displayHostComposeView.requestFocus();
                             AppUtils.hideSystemUI(XServerDisplayActivity.this);
@@ -3348,6 +3379,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                                 hudCardExpanded = false;
                                 renderDrawerMenu();
                             }
+                            updatePointerCapture();
                             AppUtils.hideSystemUI(XServerDisplayActivity.this);
                         }
 
@@ -3650,6 +3682,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             case R.id.main_menu_relative_mouse_movement:
                 isRelativeMouseMovement = !isRelativeMouseMovement;
                 xServer.setRelativeMouseMovement(isRelativeMouseMovement);
+                updatePointerCapture();
                 renderDrawerMenu();
                 break;
             case R.id.main_menu_disable_mouse:
@@ -3712,7 +3745,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 preferences.edit().putBoolean("use_dri3", isNativeRenderingEnabled).apply();
                 if (frameRating != null) frameRating.setIsNative(isNativeRenderingEnabled);
                 renderDrawerMenu();
-                showToast(this, getString(isNativeRenderingEnabled
+                WinToast.show(this, getString(isNativeRenderingEnabled
                     ? R.string.session_xserver_native_rendering_enabled_toast
                     : R.string.session_xserver_native_rendering_disabled_toast));
                 break;
@@ -3751,8 +3784,21 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
 
-        if (hasFocus && cursorLock) {
-            touchpadView.requestPointerCapture();
+        if (hasFocus && shouldUsePointerCapture()) {
+            updatePointerCapture();
+        }
+        else if (!hasFocus) {
+            releasePointerCapture();
+        }
+    }
+
+    private boolean shouldUsePointerCapture() {
+        return cursorLock;
+    }
+
+    private void updatePointerCapture() {
+        if (touchpadView == null) return;
+        if (shouldUsePointerCapture()) {
             touchpadView.setOnCapturedPointerListener(new View.OnCapturedPointerListener() {
                 @Override
                 public boolean onCapturedPointer(View view, MotionEvent event) {
@@ -3760,16 +3806,25 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     return true;
                 }
             });
-        }
-        else if (!hasFocus) {
-            if (touchpadView != null) {
-                touchpadView.resetInputState();
+            if (!touchpadView.hasPointerCapture()) {
+                touchpadView.requestPointerCapture();
             }
-            if (inputControlsView != null) {
-                inputControlsView.cancelActiveTouches();
+        } else {
+            releasePointerCapture();
+        }
+    }
+
+    private void releasePointerCapture() {
+        boolean hadPointerCapture = touchpadView != null && touchpadView.hasPointerCapture();
+        if (touchpadView != null) {
+            if (hadPointerCapture) {
+                touchpadView.resetInputState();
             }
             touchpadView.releasePointerCapture();
             touchpadView.setOnCapturedPointerListener(null);
+        }
+        if (hadPointerCapture && inputControlsView != null) {
+            inputControlsView.cancelActiveTouches();
         }
     }
 
@@ -4968,7 +5023,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     }
 
     private void handleDrawerEdgeSwipe(MotionEvent event) {
-        if (drawerStateHolder == null || drawerStateHolder.isDrawerOpen() || displayHostComposeView == null) {
+        if (drawerStateHolder == null
+                || drawerStateHolder.isDrawerOpen()
+                || displayHostComposeView == null) {
             resetDrawerEdgeGesture();
             return;
         }
@@ -7845,7 +7902,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             } catch (Exception e) {
                 Log.w("XServerDisplayActivity", "Real Steam watchdog: wineserver -k failed", e);
             }
-            runOnUiThread(() -> AppUtils.showToast(
+            runOnUiThread(() -> WinToast.show(
                     XServerDisplayActivity.this,
                     "Steam client failed to start. Try toggling Launch Steam Client off.",
                     android.widget.Toast.LENGTH_LONG));
