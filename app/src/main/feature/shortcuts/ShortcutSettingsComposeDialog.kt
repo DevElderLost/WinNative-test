@@ -475,8 +475,13 @@ class ShortcutSettingsComposeDialog private constructor(
             "immediate" -> state.lsfgSelectedPresentMode.intValue = 2
             else        -> state.lsfgSelectedPresentMode.intValue = 0
         }
-        // Pacing mode — hanya "none" yang tersedia saat ini
-        state.lsfgSelectedPacingMode.intValue = 0 // none selalu default
+        // Pacing mode — 0=Disabled (hapus env), 1=None
+        state.lsfgSelectedPacingMode.intValue = when (
+            shortcut.getExtra("lsfgPacingMode", "disabled").lowercase(Locale.ROOT)
+        ) {
+            "none" -> 1
+            else   -> 0 // disabled = default
+        }
 
         // Graphics driver (basic entries - will be updated after contents sync)
         val graphicsDriverArr =
@@ -1227,9 +1232,10 @@ class ShortcutSettingsComposeDialog private constructor(
                 else -> "fifo"
             }
             shortcut.putExtra("lsfgPresentMode", lsfgPresentMode)
-            // Pacing mode — saat ini hanya "none", simpan untuk kompatibilitas ke depan
+            // Pacing mode — 0=disabled (hapus env LSFGVK_PACING), 1=none
             val lsfgPacingMode = when (state.lsfgSelectedPacingMode.intValue) {
-                else -> "none"
+                1    -> "none"
+                else -> "disabled"
             }
             shortcut.putExtra("lsfgPacingMode", lsfgPacingMode)
 
