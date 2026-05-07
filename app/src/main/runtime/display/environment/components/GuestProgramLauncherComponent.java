@@ -1162,7 +1162,12 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     // Present mode — experimental, override Vulkan swapchain present mode
     envVars.put("LSFG_EXPERIMENTAL_PRESENT_MODE", presentMode);
     // Pacing mode — tidak bisa hot-reload, butuh swapchain recreation
-    envVars.put("LSFGVK_PACING", pacingMode);
+    // Jika "disabled": hapus env var agar lsfg-vk tidak mengaktifkan pacing
+    if ("disabled".equals(pacingMode, true)) {
+      envVars.remove("LSFGVK_PACING");
+    } else {
+      envVars.put("LSFGVK_PACING", pacingMode);
+    }
     // HDR mode — tetap pakai prefix lama karena belum ada LSFGVK_HDR
     envVars.put("LSFG_HDR_MODE", hdrMode ? "1" : "0");
     // Legacy mode: aktifkan LSFG_LEGACY=1 (menonaktifkan hot-reload conf.toml,
@@ -1206,10 +1211,10 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
   }
 
   private static String normalizeLsfgPacingMode(String value) {
-    if (value == null) return "none";
-    // Saat ini hanya "none" yang tersedia — siap untuk mode baru di masa depan
+    if (value == null) return "disabled";
     switch (value.toLowerCase(java.util.Locale.ROOT)) {
-      default: return "none";
+      case "none": return "none";
+      default:     return "disabled"; // hapus env var LSFGVK_PACING
     }
   }
   // ============================================
