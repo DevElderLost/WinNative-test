@@ -382,7 +382,7 @@ class GameSettingsStateHolder {
     val lsfgHdrMode = mutableStateOf(false)
     val lsfgPresentModeEntries = mutableStateOf(listOf("FIFO", "Mailbox", "Immediate"))
     val lsfgSelectedPresentMode = mutableIntStateOf(0)
-    val lsfgPacingModeEntries = mutableStateOf(listOf("None"))
+    val lsfgPacingModeEntries = mutableStateOf(listOf("Disabled", "None"))
     val lsfgSelectedPacingMode = mutableIntStateOf(0)
 }
 
@@ -3741,14 +3741,17 @@ private fun LsfgSection(
 ) {
     val context = LocalContext.current
     val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
+    val isLsfgEnabled = prefs.getBoolean("lsfg_enabled", false)
     val isLegacyMode = prefs.getBoolean("lsfg_legacy_mode", false)
 
-    if (!isLegacyMode) {
-        // Legacy mode tidak aktif — settings per-shortcut tidak dipakai.
-        // Kontrol LSFG saat runtime ada di XServer Drawer Menu (global).
+    if (!isLsfgEnabled || !isLegacyMode) {
+        // LSFG tidak aktif atau legacy mode tidak aktif — sembunyikan settings per-shortcut
         SettingGroup {
             Text(
-                text = stringResource(R.string.settings_lsfg_legacy_mode_required),
+                text = stringResource(
+                    if (!isLsfgEnabled) R.string.settings_lsfg_disabled_info
+                    else R.string.settings_lsfg_legacy_mode_required
+                ),
                 color = TextSecondary,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(8.dp)
@@ -3816,6 +3819,7 @@ private fun LsfgSection(
         Spacer(Modifier.height(4.dp))
 
         val pacingSummary = when (state.lsfgSelectedPacingMode.intValue) {
+            0    -> stringResource(R.string.settings_lsfg_pacing_disabled_summary)
             else -> stringResource(R.string.settings_lsfg_pacing_none_summary)
         }
         Text(
