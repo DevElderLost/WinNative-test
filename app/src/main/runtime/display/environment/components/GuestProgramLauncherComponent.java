@@ -1086,6 +1086,24 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     String presentMode = normalizeLsfgPresentMode(
         prefs.getString("lsfg_present_mode", "fifo"));
 
+    // Legacy mode: LSFG_LEGACY=1, settings diambil dari per-shortcut extras
+    boolean legacyMode = prefs.getBoolean("lsfg_legacy_mode", false);
+    if (legacyMode && shortcut != null) {
+      // Override settings dari shortcut extras (GameSettings / ShortcutSettingsComposeDialog)
+      int scMultiplier = Integer.parseInt(shortcut.getExtra("lsfgMultiplier", String.valueOf(multiplier)));
+      multiplier = Math.max(2, Math.min(4, scMultiplier));
+      float scFlowScaleF = Float.parseFloat(shortcut.getExtra("lsfgFlowScale",
+          String.format(java.util.Locale.US, "%.2f", prefs.getFloat("lsfg_flow_scale", 0.80f))));
+      flowScale = String.format(java.util.Locale.US, "%.2f",
+          Math.max(0.25f, Math.min(1.0f, scFlowScaleF)));
+      perfMode = "1".equals(shortcut.getExtra("lsfgPerformanceMode", perfMode ? "1" : "0"));
+      hdrMode  = "1".equals(shortcut.getExtra("lsfgHdrMode",  hdrMode  ? "1" : "0"));
+      presentMode = normalizeLsfgPresentMode(shortcut.getExtra("lsfgPresentMode", presentMode));
+      Log.d("GuestProgramLauncherComponent", "LSFG legacy mode: settings from shortcut"
+          + " multiplier=" + multiplier + " flowScale=" + flowScale
+          + " perfMode=" + perfMode + " presentMode=" + presentMode);
+    }
+
     // Resolve process name dari guestExecutable
     String processName = "";
     if (guestExecutable != null && !guestExecutable.isEmpty()) {
@@ -1136,7 +1154,13 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     envVars.put("LSFG_EXPERIMENTAL_PRESENT_MODE", presentMode);
     envVars.put("LSFG_DLL_PATH", dllPath);
     envVars.put("LSFG_DLL_PATH_UNIX", dllPath);
-    // JANGAN set LSFG_LEGACY=1 — itu akan menonaktifkan hot-reload conf.toml
+    // Legacy mode: aktifkan LSFG_LEGACY=1 (menonaktifkan hot-reload conf.toml,
+    // settings dikontrol per-shortcut dari GameSettings)
+    if (legacyMode) {
+      envVars.put("LSFG_LEGACY", "1");
+    } else {
+      envVars.remove("LSFG_LEGACY");
+    }
     if (!processName.isEmpty()) {
       envVars.put("LSFG_PROCESS", processName);
       envVars.put("LSFG_PROCESS_EXE", processName);
