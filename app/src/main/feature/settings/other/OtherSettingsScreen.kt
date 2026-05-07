@@ -1221,7 +1221,10 @@ private fun LsfgToggleCard(
                     Switch(
                         checked = currentLegacyMode,
                         onCheckedChange = onLegacyModeChanged,
-                        colors = outlinedSwitchColors(),
+                        colors = outlinedSwitchColors(
+                            accentColor = Accent,
+                            textSecondaryColor = TextSecondary,
+                        ),
                     )
                 }
 
