@@ -1203,5 +1203,7 @@ Installed path:
 <string name="settings_lsfg_legacy_mode">Legacy Mode</string>
 <string name="settings_lsfg_legacy_mode_summary">Enable Lsfg Legacy Mode, settings controlled per-shortcut</string>
 <string name="settings_lsfg_legacy_mode_required">Enable Legacy Mode in Other Settings to configure LSFG per shortcut</string>
+<string name="settings_lsfg_pacing_mode">Pacing Mode</string>
+<string name="settings_lsfg_pacing_none_summary">Traditional lsfg-vk behavior. Forces V-Sync on. Generated frames are presented immediately as they are ready. May require workarounds on some compositors. Changes require a game restart.</string>
 
 </resources>
