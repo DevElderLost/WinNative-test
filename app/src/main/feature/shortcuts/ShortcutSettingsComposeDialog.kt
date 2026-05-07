@@ -474,6 +474,8 @@ class ShortcutSettingsComposeDialog private constructor(
             "immediate" -> state.lsfgSelectedPresentMode.intValue = 2
             else        -> state.lsfgSelectedPresentMode.intValue = 0
         }
+        // Pacing mode — hanya "none" yang tersedia saat ini
+        state.lsfgSelectedPacingMode.intValue = 0 // none selalu default
 
         // Graphics driver (basic entries - will be updated after contents sync)
         val graphicsDriverArr =
@@ -1224,6 +1226,11 @@ class ShortcutSettingsComposeDialog private constructor(
                 else -> "fifo"
             }
             shortcut.putExtra("lsfgPresentMode", lsfgPresentMode)
+            // Pacing mode — saat ini hanya "none", simpan untuk kompatibilitas ke depan
+            val lsfgPacingMode = when (state.lsfgSelectedPacingMode.intValue) {
+                else -> "none"
+            }
+            shortcut.putExtra("lsfgPacingMode", lsfgPacingMode)
 
             // Desktop Theme — stored as compound "THEME,TYPE,COLOR" string
             if (state.desktopThemeEntries.value.isNotEmpty()) {
