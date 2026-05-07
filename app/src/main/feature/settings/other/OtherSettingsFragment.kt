@@ -378,7 +378,7 @@ class OtherSettingsFragment : Fragment() {
         val rawFileName = uri.lastPathSegment?.substringAfterLast('/') ?: "Lossless.dll"
         val safeFileName = rawFileName.filter { it.isLetterOrDigit() || it == '.' || it == '_' || it == '-' }
         if (!safeFileName.endsWith(".dll", ignoreCase = true)) {
-            com.winlator.cmod.shared.android.AppUtils.showToast(
+            WinToast.show(
                 ctx, R.string.settings_lsfg_select_valid_dll, android.widget.Toast.LENGTH_SHORT
             )
             return
@@ -391,7 +391,7 @@ class OtherSettingsFragment : Fragment() {
                 outputFile.outputStream().use { output -> input.copyTo(output) }
             }
         } catch (e: Exception) {
-            com.winlator.cmod.shared.android.AppUtils.showToast(
+            WinToast.show(
                 ctx, R.string.settings_lsfg_import_failed, android.widget.Toast.LENGTH_SHORT
             )
             return
