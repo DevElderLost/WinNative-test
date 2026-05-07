@@ -1085,6 +1085,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     boolean hdrMode  = prefs.getBoolean("lsfg_hdr_mode", false);
     String presentMode = normalizeLsfgPresentMode(
         prefs.getString("lsfg_present_mode", "fifo"));
+    String pacingMode = "none"; // default, hanya "none" yang tersedia saat ini
 
     // Legacy mode: LSFG_LEGACY=1, settings diambil dari per-shortcut extras
     boolean legacyMode = prefs.getBoolean("lsfg_legacy_mode", false);
@@ -1099,9 +1100,11 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
       perfMode = "1".equals(shortcut.getExtra("lsfgPerformanceMode", perfMode ? "1" : "0"));
       hdrMode  = "1".equals(shortcut.getExtra("lsfgHdrMode",  hdrMode  ? "1" : "0"));
       presentMode = normalizeLsfgPresentMode(shortcut.getExtra("lsfgPresentMode", presentMode));
+      pacingMode  = normalizeLsfgPacingMode(shortcut.getExtra("lsfgPacingMode", pacingMode));
       Log.d("GuestProgramLauncherComponent", "LSFG legacy mode: settings from shortcut"
           + " multiplier=" + multiplier + " flowScale=" + flowScale
-          + " perfMode=" + perfMode + " presentMode=" + presentMode);
+          + " perfMode=" + perfMode + " presentMode=" + presentMode
+          + " pacingMode=" + pacingMode);
     }
 
     // Resolve process name dari guestExecutable
@@ -1147,13 +1150,21 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     envVars.put("LSFG_CONFIG", confToml.getAbsolutePath());
     envVars.put("LSFG_LAST_PATH", new java.io.File(lsfgTmpDir, "lsfg-vk_last").getAbsolutePath());
     envVars.put("LSFG_TMP_DIR", lsfgTmpDir.getAbsolutePath());
-    envVars.put("LSFG_MULTIPLIER", String.valueOf(multiplier));
-    envVars.put("LSFG_FLOW_SCALE", flowScale);
-    envVars.put("LSFG_PERFORMANCE_MODE", perfMode ? "1" : "0");
-    envVars.put("LSFG_HDR_MODE", hdrMode ? "1" : "0");
-    envVars.put("LSFG_EXPERIMENTAL_PRESENT_MODE", presentMode);
     envVars.put("LSFG_DLL_PATH", dllPath);
     envVars.put("LSFG_DLL_PATH_UNIX", dllPath);
+
+    // Env var mode — gunakan LSFGVK_ENV=1 agar LSFGVK_* dibaca oleh versi terbaru
+    envVars.put("LSFGVK_ENV", "1");
+    envVars.put("LSFGVK_DLL_PATH", dllPath);
+    envVars.put("LSFGVK_MULTIPLIER", String.valueOf(multiplier));
+    envVars.put("LSFGVK_FLOW_SCALE", flowScale);
+    envVars.put("LSFGVK_PERFORMANCE_MODE", perfMode ? "1" : "0");
+    // Present mode — experimental, override Vulkan swapchain present mode
+    envVars.put("LSFG_EXPERIMENTAL_PRESENT_MODE", presentMode);
+    // Pacing mode — tidak bisa hot-reload, butuh swapchain recreation
+    envVars.put("LSFGVK_PACING", pacingMode);
+    // HDR mode — tetap pakai prefix lama karena belum ada LSFGVK_HDR
+    envVars.put("LSFG_HDR_MODE", hdrMode ? "1" : "0");
     // Legacy mode: aktifkan LSFG_LEGACY=1 (menonaktifkan hot-reload conf.toml,
     // settings dikontrol per-shortcut dari GameSettings)
     if (legacyMode) {
@@ -1169,7 +1180,8 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     Log.d("GuestProgramLauncherComponent", "LSFG armed:"
         + " process='" + processName + "' dll='" + dllPath + "'"
         + " multiplier=" + multiplier + " flowScale=" + flowScale
-        + " perfMode=" + perfMode + " presentMode=" + presentMode);
+        + " perfMode=" + perfMode + " presentMode=" + presentMode
+        + " pacingMode=" + pacingMode);
   }
 
   private static String clampLsfgInt(String value, int min, int max) {
@@ -1190,6 +1202,14 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
       case "mailbox":   return "mailbox";
       case "immediate": return "immediate";
       default:          return "fifo";
+    }
+  }
+
+  private static String normalizeLsfgPacingMode(String value) {
+    if (value == null) return "none";
+    // Saat ini hanya "none" yang tersedia — siap untuk mode baru di masa depan
+    switch (value.toLowerCase(java.util.Locale.ROOT)) {
+      default: return "none";
     }
   }
   // ============================================
