@@ -375,7 +375,6 @@ class GameSettingsStateHolder {
     val isLoaded = mutableStateOf(false)
 
     // LSFG
-    val lsfgEnabled = mutableStateOf(false)
     val lsfgMultiplierEntries = mutableStateOf(listOf("2x", "3x", "4x"))
     val lsfgSelectedMultiplier = mutableIntStateOf(0)
     val lsfgFlowScale = mutableIntStateOf(80)
@@ -383,6 +382,8 @@ class GameSettingsStateHolder {
     val lsfgHdrMode = mutableStateOf(false)
     val lsfgPresentModeEntries = mutableStateOf(listOf("FIFO", "Mailbox", "Immediate"))
     val lsfgSelectedPresentMode = mutableIntStateOf(0)
+    val lsfgPacingModeEntries = mutableStateOf(listOf("None"))
+    val lsfgSelectedPacingMode = mutableIntStateOf(0)
 }
 
 // ---------------------------------------------------------------------------
@@ -3756,17 +3757,7 @@ private fun LsfgSection(
         return
     }
 
-    // Legacy mode aktif — enable toggle + settings per-shortcut
-    SettingGroup {
-        SettingCheckbox(
-            label = stringResource(R.string.settings_lsfg_enable),
-            checked = state.lsfgEnabled.value,
-            onCheckedChange = { state.lsfgEnabled.value = it }
-        )
-    }
-
-    Spacer(Modifier.height(16.dp))
-
+    // Legacy mode aktif — hanya settings per-shortcut (enable/disable dikontrol global)
     SubsectionLabel(stringResource(R.string.settings_lsfg_frame_generation))
     Spacer(Modifier.height(8.dp))
     SettingGroup {
@@ -3775,7 +3766,6 @@ private fun LsfgSection(
             entries = state.lsfgMultiplierEntries.value,
             selectedIndex = state.lsfgSelectedMultiplier.intValue,
             onSelected = { state.lsfgSelectedMultiplier.intValue = it },
-            enabled = state.lsfgEnabled.value
         )
 
         Spacer(Modifier.height(14.dp))
@@ -3793,7 +3783,6 @@ private fun LsfgSection(
             label = stringResource(R.string.settings_lsfg_performance_mode),
             checked = state.lsfgPerformanceMode.value,
             onCheckedChange = { state.lsfgPerformanceMode.value = it },
-            enabled = state.lsfgEnabled.value
         )
 
         Spacer(Modifier.height(4.dp))
@@ -3802,7 +3791,6 @@ private fun LsfgSection(
             label = stringResource(R.string.settings_lsfg_hdr_mode),
             checked = state.lsfgHdrMode.value,
             onCheckedChange = { state.lsfgHdrMode.value = it },
-            enabled = state.lsfgEnabled.value
         )
 
         Spacer(Modifier.height(12.dp))
@@ -3812,7 +3800,29 @@ private fun LsfgSection(
             entries = state.lsfgPresentModeEntries.value,
             selectedIndex = state.lsfgSelectedPresentMode.intValue,
             onSelected = { state.lsfgSelectedPresentMode.intValue = it },
-            enabled = state.lsfgEnabled.value
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        // Pacing mode — tidak bisa hot-reload, butuh restart game.
+        // Hanya tersedia per-shortcut, tidak di XServer Drawer.
+        SettingDropdown(
+            label = stringResource(R.string.settings_lsfg_pacing_mode),
+            entries = state.lsfgPacingModeEntries.value,
+            selectedIndex = state.lsfgSelectedPacingMode.intValue,
+            onSelected = { state.lsfgSelectedPacingMode.intValue = it },
+        )
+
+        Spacer(Modifier.height(4.dp))
+
+        val pacingSummary = when (state.lsfgSelectedPacingMode.intValue) {
+            else -> stringResource(R.string.settings_lsfg_pacing_none_summary)
+        }
+        Text(
+            text = pacingSummary,
+            color = TextSecondary,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(horizontal = 4.dp),
         )
     }
 }
