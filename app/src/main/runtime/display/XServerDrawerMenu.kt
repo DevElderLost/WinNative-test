@@ -322,6 +322,7 @@ data class XServerDrawerState(
     val lsfgHdrMode: Boolean = false,
     val lsfgPresentModeIndex: Int = 0,
     val lsfgDllPath: String = "",
+    val lsfgLegacyMode: Boolean = false,
     val inputControlsProfileNames: List<String> = emptyList(),
     val inputControlsSelectedProfileIndex: Int = 0,
     val inputControlsShowOverlay: Boolean = false,
@@ -579,6 +580,7 @@ fun buildXServerDrawerState(
     lsfgHdrMode: Boolean = false,
     lsfgPresentModeIndex: Int = 0,
     lsfgDllPath: String = "",
+    lsfgLegacyMode: Boolean = false,
     inputControlsProfileNames: List<String> = emptyList(),
     inputControlsSelectedProfileIndex: Int = 0,
     inputControlsShowOverlay: Boolean = false,
@@ -741,6 +743,7 @@ fun buildXServerDrawerState(
         lsfgHdrMode = lsfgHdrMode,
         lsfgPresentModeIndex = lsfgPresentModeIndex,
         lsfgDllPath = lsfgDllPath,
+        lsfgLegacyMode = lsfgLegacyMode,
         inputControlsProfileNames = inputControlsProfileNames,
         inputControlsSelectedProfileIndex = inputControlsSelectedProfileIndex,
         inputControlsShowOverlay = inputControlsShowOverlay,
@@ -2048,8 +2051,9 @@ private fun ScreenEffectsPaneContent(
                 }
             }
 
-            // LSFG — hanya tampil jika aktif dan DLL sudah diimport
-            if (state.lsfgEnabled && state.lsfgDllPath.isNotBlank()) {
+            // LSFG — hanya tampil jika aktif, DLL sudah diimport, dan BUKAN legacy mode
+            // (legacy mode: settings dikontrol per-shortcut di GameSettings)
+            if (state.lsfgEnabled && state.lsfgDllPath.isNotBlank() && !state.lsfgLegacyMode) {
                 HorizontalDivider(
                     color = DrawerOutline,
                     thickness = 1.dp,
