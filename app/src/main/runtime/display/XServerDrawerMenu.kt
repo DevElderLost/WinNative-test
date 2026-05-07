@@ -83,6 +83,7 @@ import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.ZoomIn
+import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -620,7 +621,7 @@ fun buildXServerDrawerState(
                 title = context.getString(R.string.session_drawer_simulated_touch),
                 subtitle =
                     if (simulatedTouchEnabled) context.getString(R.string.common_ui_enabled) else context.getString(R.string.common_ui_disabled),
-                icon = Icons.Outlined.Apps,
+                icon = Icons.Outlined.TouchApp,
                 active = simulatedTouchEnabled,
             ),
             XServerDrawerItem(
