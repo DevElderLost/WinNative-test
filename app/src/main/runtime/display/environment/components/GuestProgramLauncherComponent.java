@@ -1088,21 +1088,28 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     String pacingMode = normalizeLsfgPacingMode(
         prefs.getString("lsfg_pacing_mode", "disabled"));
 
-    // Legacy mode: LSFG_LEGACY=1, settings diambil dari per-shortcut extras
-    boolean legacyMode = prefs.getBoolean("lsfg_legacy_mode", false);
-    if (legacyMode && shortcut != null) {
-      // Override settings dari shortcut extras (GameSettings / ShortcutSettingsComposeDialog)
-      int scMultiplier = Integer.parseInt(shortcut.getExtra("lsfgMultiplier", String.valueOf(multiplier)));
-      multiplier = Math.max(2, Math.min(4, scMultiplier));
-      float scFlowScaleF = Float.parseFloat(shortcut.getExtra("lsfgFlowScale",
-          String.format(java.util.Locale.US, "%.2f", prefs.getFloat("lsfg_flow_scale", 0.80f))));
-      flowScale = String.format(java.util.Locale.US, "%.2f",
-          Math.max(0.25f, Math.min(1.0f, scFlowScaleF)));
-      perfMode = "1".equals(shortcut.getExtra("lsfgPerformanceMode", perfMode ? "1" : "0"));
-      hdrMode  = "1".equals(shortcut.getExtra("lsfgHdrMode",  hdrMode  ? "1" : "0"));
-      presentMode = normalizeLsfgPresentMode(shortcut.getExtra("lsfgPresentMode", presentMode));
-      pacingMode  = normalizeLsfgPacingMode(shortcut.getExtra("lsfgPacingMode", pacingMode));
-      Log.d("GuestProgramLauncherComponent", "LSFG legacy mode: settings from shortcut"
+    // Per-shortcut override: baca settings dari extras shortcut jika tersedia
+    if (shortcut != null) {
+      String scMultiplierStr = shortcut.getExtra("lsfgMultiplier", null);
+      if (scMultiplierStr != null) {
+        int scMultiplier = Integer.parseInt(scMultiplierStr);
+        multiplier = Math.max(2, Math.min(4, scMultiplier));
+      }
+      String scFlowScaleStr = shortcut.getExtra("lsfgFlowScale", null);
+      if (scFlowScaleStr != null) {
+        float scFlowScaleF = Float.parseFloat(scFlowScaleStr);
+        flowScale = String.format(java.util.Locale.US, "%.2f",
+            Math.max(0.25f, Math.min(1.0f, scFlowScaleF)));
+      }
+      String scPerfMode = shortcut.getExtra("lsfgPerformanceMode", null);
+      if (scPerfMode != null) perfMode = "1".equals(scPerfMode);
+      String scHdrMode = shortcut.getExtra("lsfgHdrMode", null);
+      if (scHdrMode != null) hdrMode = "1".equals(scHdrMode);
+      String scPresentMode = shortcut.getExtra("lsfgPresentMode", null);
+      if (scPresentMode != null) presentMode = normalizeLsfgPresentMode(scPresentMode);
+      String scPacingMode = shortcut.getExtra("lsfgPacingMode", null);
+      if (scPacingMode != null) pacingMode = normalizeLsfgPacingMode(scPacingMode);
+      Log.d("GuestProgramLauncherComponent", "LSFG per-shortcut settings applied:"
           + " multiplier=" + multiplier + " flowScale=" + flowScale
           + " perfMode=" + perfMode + " presentMode=" + presentMode
           + " pacingMode=" + pacingMode);
@@ -1171,13 +1178,6 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     }
     // HDR mode — tetap pakai prefix lama karena belum ada LSFGVK_HDR
     envVars.put("LSFG_HDR_MODE", hdrMode ? "1" : "0");
-    // Legacy mode: aktifkan LSFG_LEGACY=1 (menonaktifkan hot-reload conf.toml,
-    // settings dikontrol per-shortcut dari GameSettings)
-    if (legacyMode) {
-      envVars.put("LSFG_LEGACY", "1");
-    } else {
-      envVars.remove("LSFG_LEGACY");
-    }
     if (!processName.isEmpty()) {
       envVars.put("LSFG_PROCESS", processName);
       envVars.put("LSFG_PROCESS_EXE", processName);
