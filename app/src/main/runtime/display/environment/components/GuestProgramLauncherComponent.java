@@ -1085,7 +1085,8 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     boolean hdrMode  = prefs.getBoolean("lsfg_hdr_mode", false);
     String presentMode = normalizeLsfgPresentMode(
         prefs.getString("lsfg_present_mode", "fifo"));
-    String pacingMode = "none"; // default, hanya "none" yang tersedia saat ini
+    String pacingMode = normalizeLsfgPacingMode(
+        prefs.getString("lsfg_pacing_mode", "disabled"));
 
     // Legacy mode: LSFG_LEGACY=1, settings diambil dari per-shortcut extras
     boolean legacyMode = prefs.getBoolean("lsfg_legacy_mode", false);
@@ -1213,8 +1214,10 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
   private static String normalizeLsfgPacingMode(String value) {
     if (value == null) return "disabled";
     switch (value.toLowerCase(java.util.Locale.ROOT)) {
-      case "none": return "none";
-      default:     return "disabled"; // hapus env var LSFGVK_PACING
+      case "none":      return "none";
+      case "sleep":     return "sleep";
+      case "busy_wait": return "busy_wait";
+      default:          return "disabled"; // hapus env var LSFGVK_PACING
     }
   }
   // ============================================
