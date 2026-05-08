@@ -1113,10 +1113,11 @@ private fun LsfgToggleCard(
     // saat toggle diubah, sehingga nama DLL berbeda antara switch row dan import row.
     val currentDllPath by rememberUpdatedState(dllPath)
     val hasFile = currentDllPath.isNotBlank()
+    // Tampilkan nama file lengkap persis seperti yang tersimpan di path,
+    // mis. "global-1777952628276-Lossless.dll"
     val displayName = if (hasFile)
         currentDllPath.substringAfterLast('/').substringAfterLast('\\')
-            .replaceFirst(Regex("^.*?-\\d{10,}-"), "")
-            .ifBlank { currentDllPath.substringAfterLast('/').substringAfterLast('\\') }
+            .ifBlank { currentDllPath }
     else ""
 
     Column(
