@@ -18,36 +18,48 @@ public final class DXVKConfigUtils {
         return new KeyValueSet(data);
     }
 
-    public static void setEnvVars(Context context, KeyValueSet config, EnvVars envVars) {
-        setEnvVars(context, config, envVars, 0);
+public static void setEnvVars(Context context, KeyValueSet config,
+        EnvVars envVars, int refreshRateOverride) {
+    setEnvVars(context, config, envVars, refreshRateOverride, "immediate");
+}
+
+public static void setEnvVars(Context context, KeyValueSet config,
+        EnvVars envVars, int refreshRateOverride, String lsfgPresentMode) {
+    String content = "";
+
+    if (refreshRateOverride > 0) {
+        String rateStr = String.valueOf(refreshRateOverride);
+
+        // Jika lsfg present mode bukan immediate, syncInterval harus 1
+        // supaya DXVK tidak fight dengan lsfg-vk yang force FIFO/MAILBOX
+        boolean lsfgForcesVsync = lsfgPresentMode != null
+            && (lsfgPresentMode.equals("fifo") || lsfgPresentMode.equals("mailbox"));
+
+        String syncInterval = lsfgForcesVsync ? "1" : "0";
+
+        content += "dxgi.syncInterval = " + syncInterval + "; ";
+        content += "dxgi.maxFrameRate = " + rateStr + "; ";
+        content += "d3d9.maxFrameRate = " + rateStr;
+        envVars.put("DXVK_FRAME_RATE", rateStr);
     }
 
-    public static void setEnvVars(Context context, KeyValueSet config, EnvVars envVars, int refreshRateOverride) {
-        String content = "";
-
-        if (refreshRateOverride > 0) {
-            String rateStr = String.valueOf(refreshRateOverride);
-            content += "dxgi.syncInterval = 0; ";
-            content += "dxgi.maxFrameRate = " + rateStr + "; ";
-            content += "d3d9.maxFrameRate = " + rateStr;
-            envVars.put("DXVK_FRAME_RATE", rateStr);
-        }
-
-        String async = config.get("async");
-        if (!async.isEmpty() && !async.equals("0")) {
-            envVars.put("DXVK_ASYNC", "1");
-        }
-
-        String asyncCache = config.get("asyncCache");
-        if (!asyncCache.isEmpty() && !asyncCache.equals("0")) {
-            envVars.put("DXVK_GPLASYNCCACHE", "1");
-        }
-
-        if (!content.isEmpty()) {
-            envVars.put("DXVK_CONFIG", content);
-        }
-
-        envVars.put("VKD3D_FEATURE_LEVEL", config.get("vkd3dLevel"));
-        envVars.put("DXVK_STATE_CACHE_PATH", context.getFilesDir() + "/imagefs/" + ImageFs.CACHE_PATH);
+    String async = config.get("async");
+    if (!async.isEmpty() && !async.equals("0")) {
+        envVars.put("DXVK_ASYNC", "1");
     }
+
+    String asyncCache = config.get("asyncCache");
+    if (!asyncCache.isEmpty() && !asyncCache.equals("0")) {
+        envVars.put("DXVK_GPLASYNCCACHE", "1");
+    }
+
+    if (!content.isEmpty()) {
+        envVars.put("DXVK_CONFIG", content);
+    }
+
+    envVars.put("VKD3D_FEATURE_LEVEL", config.get("vkd3dLevel"));
+    envVars.put("DXVK_STATE_CACHE_PATH",
+        context.getFilesDir() + "/imagefs/" + ImageFs.CACHE_PATH);
+}
+
 }
