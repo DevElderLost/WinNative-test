@@ -475,12 +475,14 @@ class ShortcutSettingsComposeDialog private constructor(
             "immediate" -> state.lsfgSelectedPresentMode.intValue = 2
             else        -> state.lsfgSelectedPresentMode.intValue = 0
         }
-        // Pacing mode — 0=Disabled (hapus env), 1=None
+        // Pacing mode — 0=Disabled (hapus env), 1=None, 2=Sleep, 3=Busy Wait
         state.lsfgSelectedPacingMode.intValue = when (
             shortcut.getExtra("lsfgPacingMode", "disabled").lowercase(Locale.ROOT)
         ) {
-            "none" -> 1
-            else   -> 0 // disabled = default
+            "none"      -> 1
+            "sleep"     -> 2
+            "busy_wait" -> 3
+            else        -> 0 // disabled = default
         }
 
         // Graphics driver (basic entries - will be updated after contents sync)
@@ -1232,9 +1234,11 @@ class ShortcutSettingsComposeDialog private constructor(
                 else -> "fifo"
             }
             shortcut.putExtra("lsfgPresentMode", lsfgPresentMode)
-            // Pacing mode — 0=disabled (hapus env LSFGVK_PACING), 1=none
+            // Pacing mode — 0=disabled (hapus env LSFGVK_PACING), 1=none, 2=sleep, 3=busy_wait
             val lsfgPacingMode = when (state.lsfgSelectedPacingMode.intValue) {
                 1    -> "none"
+                2    -> "sleep"
+                3    -> "busy_wait"
                 else -> "disabled"
             }
             shortcut.putExtra("lsfgPacingMode", lsfgPacingMode)
