@@ -3055,7 +3055,6 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 preferences.getBoolean("lsfg_hdr_mode", false),
                 lsfgPresentModeStringToIndex(preferences.getString("lsfg_present_mode", "fifo")),
                 preferences.getString("lsfg_dll_path", "") != null ? preferences.getString("lsfg_dll_path", "") : "",
-                preferences.getBoolean("lsfg_legacy_mode", false),
                 inputProfileNames,
                 inputSelectedIndex,
                 preferences.getBoolean("show_touchscreen_controls_enabled", false),
