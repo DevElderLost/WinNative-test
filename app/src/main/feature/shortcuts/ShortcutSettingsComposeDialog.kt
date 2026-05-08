@@ -89,6 +89,7 @@ class ShortcutSettingsComposeDialog private constructor(
     private val fragment: ShortcutsFragment?
 ) {
     private val context: Context = activity
+    private val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(activity)
 
     constructor(fragment: ShortcutsFragment, shortcut: Shortcut) :
         this(fragment.requireActivity(), shortcut, fragment)
@@ -462,22 +463,29 @@ class ShortcutSettingsComposeDialog private constructor(
         val savedFpsLimit = shortcut.getExtra("fpsLimit", "0")
         state.fpsLimit.intValue = savedFpsLimit.toIntOrNull() ?: 0
 
-        // LSFG
-        //state.lsfgEnabled.value = shortcut.getExtra("lsfgEnabled", "0") == "1"
-        val lsfgMultiplier = shortcut.getExtra("lsfgMultiplier", "2").toIntOrNull() ?: 2
+        // LSFG — load dari shortcut extras; jika belum ada, gunakan nilai global (drawer)
+        // sebagai default sehingga settings per-shortcut terhubung dengan drawer.
+        val globalMultiplier = prefs.getInt("lsfg_multiplier", 2).coerceIn(2, 4)
+        val globalFlowScale  = prefs.getFloat("lsfg_flow_scale", 0.80f).coerceIn(0.25f, 1.0f)
+        val globalPerfMode   = if (prefs.getBoolean("lsfg_performance_mode", true)) "1" else "0"
+        val globalHdrMode    = if (prefs.getBoolean("lsfg_hdr_mode", false)) "1" else "0"
+        val globalPresentMode = prefs.getString("lsfg_present_mode", "fifo") ?: "fifo"
+        val globalPacingMode  = prefs.getString("lsfg_pacing_mode", "disabled") ?: "disabled"
+
+        val lsfgMultiplier = shortcut.getExtra("lsfgMultiplier", globalMultiplier.toString()).toIntOrNull() ?: globalMultiplier
         state.lsfgSelectedMultiplier.intValue = (lsfgMultiplier - 2).coerceIn(0, 2)
-        val flowScale = shortcut.getExtra("lsfgFlowScale", "0.80").toFloatOrNull() ?: 0.80f
+        val flowScale = shortcut.getExtra("lsfgFlowScale", String.format(Locale.US, "%.2f", globalFlowScale)).toFloatOrNull() ?: globalFlowScale
         state.lsfgFlowScale.intValue = (flowScale * 100f).toInt().coerceIn(25, 100)
-        state.lsfgPerformanceMode.value = shortcut.getExtra("lsfgPerformanceMode", "1") == "1"
-        state.lsfgHdrMode.value = shortcut.getExtra("lsfgHdrMode", "0") == "1"
-        when (shortcut.getExtra("lsfgPresentMode", "fifo").lowercase(Locale.ROOT)) {
+        state.lsfgPerformanceMode.value = shortcut.getExtra("lsfgPerformanceMode", globalPerfMode) == "1"
+        state.lsfgHdrMode.value = shortcut.getExtra("lsfgHdrMode", globalHdrMode) == "1"
+        when (shortcut.getExtra("lsfgPresentMode", globalPresentMode).lowercase(Locale.ROOT)) {
             "mailbox"   -> state.lsfgSelectedPresentMode.intValue = 1
             "immediate" -> state.lsfgSelectedPresentMode.intValue = 2
             else        -> state.lsfgSelectedPresentMode.intValue = 0
         }
         // Pacing mode — 0=Disabled (hapus env), 1=None, 2=Sleep, 3=Busy Wait
         state.lsfgSelectedPacingMode.intValue = when (
-            shortcut.getExtra("lsfgPacingMode", "disabled").lowercase(Locale.ROOT)
+            shortcut.getExtra("lsfgPacingMode", globalPacingMode).lowercase(Locale.ROOT)
         ) {
             "none"      -> 1
             "sleep"     -> 2
