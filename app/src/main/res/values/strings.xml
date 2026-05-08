@@ -1204,8 +1204,43 @@ Installed path:
 <string name="settings_lsfg_legacy_mode_summary">Enable Lsfg Legacy Mode, settings controlled per-shortcut</string>
 <string name="settings_lsfg_legacy_mode_required">Enable Legacy Mode in Other Settings to configure LSFG per shortcut</string>
 <string name="settings_lsfg_pacing_mode">Pacing Mode</string>
-<string name="settings_lsfg_pacing_none_summary">Traditional lsfg-vk behavior. Forces V-Sync on. Generated frames are presented immediately as they are ready. May require workarounds on some compositors. Changes require a game restart.</string>
 <string name="settings_lsfg_disabled_info">Enable LSFG in Other Settings to configure per-shortcut settings</string>
-<string name="settings_lsfg_pacing_disabled_summary">Pacing is disabled. LSFGVK_PACING environment variable will not be set.</string>
+<string name="settings_lsfg_pacing_disabled_summary">
+    Pacing is disabled. The LSFGVK_PACING environment variable is not set,
+    so lsfg-vk will not apply any custom frame scheduling. All generated
+    frames are submitted to the swapchain as fast as possible. This is the
+    safest option and has no CPU overhead, but generated frames may appear
+    unevenly spaced depending on the driver and compositor.
+</string>
+
+<!-- ── None (index 1) ───────────────────────────────────────────────── -->
+<string name="settings_lsfg_pacing_none_summary">
+    No explicit pacing logic is applied by lsfg-vk. Generated frames are
+    submitted immediately after they are ready, and the compositor is
+    responsible for display timing via the selected present mode (typically
+    FIFO / VSync). Use this if the game already feels smooth or if you want
+    to let the GPU driver handle frame cadence on its own.
+</string>
+
+<!-- ── Sleep (index 2) ──────────────────────────────────────────────── -->
+<string name="settings_lsfg_pacing_sleep_summary">
+    Sleep-based pacing. lsfg-vk measures the interval between real frames
+    and uses sleep_until() to schedule each generated frame at an evenly
+    spaced time slot. This produces a smoother perceived cadence with low
+    CPU usage. Timing precision depends on the OS scheduler; occasional
+    jitter is possible. Recommended as the default choice for most devices.
+    Requires a swapchain recreate — restart the game after changing this.
+</string>
+
+<!-- ── Busy Wait (index 3) ──────────────────────────────────────────── -->
+<string name="settings_lsfg_pacing_busy_wait_summary">
+    Busy-wait pacing. lsfg-vk spins with yield() until each generated
+    frame\'s target time slot arrives, achieving higher timing precision
+    than Sleep mode. This eliminates scheduler-induced jitter at the cost
+    of increased CPU usage. Best suited for devices with sufficient thermal
+    headroom. Not recommended on battery-limited or thermally constrained
+    hardware. Requires a swapchain recreate — restart the game after
+    changing this.
+</string>
 
 </resources>
