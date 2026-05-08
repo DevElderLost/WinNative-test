@@ -125,7 +125,6 @@ data class OtherSettingsState(
     // LSFG
     val lsfgEnabled: Boolean = false,
     val lsfgDllPath: String = "",
-    val lsfgLegacyMode: Boolean = false,
 )
 
 @Composable
@@ -171,7 +170,6 @@ fun OtherSettingsScreen(
     onImportLsfgDll: () -> Unit = {},
     onClearLsfgDll: () -> Unit = {},
     onLsfgEnabledChanged: (Boolean) -> Unit = {},
-    onLsfgLegacyModeChanged: (Boolean) -> Unit = {},
 ) {
     var showReinstallDialog by remember { mutableStateOf(false) }
     val layoutDirection = LocalLayoutDirection.current
@@ -351,9 +349,7 @@ fun OtherSettingsScreen(
             LsfgToggleCard(
                 enabled = state.lsfgEnabled,
                 dllPath = state.lsfgDllPath,
-                legacyMode = state.lsfgLegacyMode,
                 onEnabledChanged = onLsfgEnabledChanged,
-                onLegacyModeChanged = onLsfgLegacyModeChanged,
                 onImport = onImportLsfgDll,
                 onClear = onClearLsfgDll,
             )
@@ -1108,9 +1104,7 @@ private fun ImagefsInstallProgressDialog(percent: Int) {
 private fun LsfgToggleCard(
     enabled: Boolean,
     dllPath: String,
-    legacyMode: Boolean,
     onEnabledChanged: (Boolean) -> Unit,
-    onLegacyModeChanged: (Boolean) -> Unit,
     onImport: () -> Unit,
     onClear: () -> Unit,
 ) {
@@ -1118,7 +1112,6 @@ private fun LsfgToggleCard(
     // AnimatedVisibility — tanpa ini konten animasi pakai snapshot state lama
     // saat toggle diubah, sehingga nama DLL berbeda antara switch row dan import row.
     val currentDllPath by rememberUpdatedState(dllPath)
-    val currentLegacyMode by rememberUpdatedState(legacyMode)
     val hasFile = currentDllPath.isNotBlank()
     val displayName = if (hasFile)
         currentDllPath.substringAfterLast('/').substringAfterLast('\\')
@@ -1192,42 +1185,6 @@ private fun LsfgToggleCard(
             exit = fadeOut() + shrinkVertically(),
         ) {
             Column {
-                HorizontalDivider(color = CardBorder, thickness = 1.dp)
-
-                // ── Legacy Mode switch ──────────────────────────────────────
-                // Jika aktif: set LSFG_LEGACY=1 (env), sembunyikan real-time
-                // settings di XServer Drawer, dan baca settings dari per-shortcut
-                // (GameSettings / ShortcutSettingsComposeDialog).
-                // Import DLL tetap global.
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.settings_lsfg_legacy_mode),
-                            color = TextPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(
-                            text = stringResource(R.string.settings_lsfg_legacy_mode_summary),
-                            color = TextSecondary,
-                            fontSize = 11.sp,
-                        )
-                    }
-                    Switch(
-                        checked = currentLegacyMode,
-                        onCheckedChange = onLegacyModeChanged,
-                        colors = outlinedSwitchColors(
-                            accentColor = Accent,
-                            textSecondaryColor = TextSecondary,
-                        ),
-                    )
-                }
-
                 HorizontalDivider(color = CardBorder, thickness = 1.dp)
 
                 // ── DLL name + import button ────────────────────────────────

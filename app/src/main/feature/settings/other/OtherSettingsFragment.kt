@@ -180,16 +180,7 @@ class OtherSettingsFragment : Fragment() {
                         onImportLsfgDll = { lsfgDllPickerLauncher.launch(arrayOf("*/*")) },
                         onClearLsfgDll = { clearLsfgDll() },
                         onLsfgEnabledChanged = { enabled ->
-                            preferences.edit {
-                                putBoolean("lsfg_enabled", enabled)
-                                // Jika LSFG dinonaktifkan, legacy mode otomatis dinonaktifkan
-                                // agar LsfgSection di GameSettings ikut tersembunyi
-                                if (!enabled) putBoolean("lsfg_legacy_mode", false)
-                            }
-                            refresh()
-                        },
-                        onLsfgLegacyModeChanged = { legacy ->
-                            preferences.edit { putBoolean("lsfg_legacy_mode", legacy) }
+                            preferences.edit { putBoolean("lsfg_enabled", enabled) }
                             refresh()
                         },
                     )
@@ -255,7 +246,6 @@ class OtherSettingsFragment : Fragment() {
                 imagefsInstallProgress = uiState.imagefsInstallProgress,
                 lsfgDllPath = preferences.getString("lsfg_dll_path", "") ?: "",
                 lsfgEnabled = preferences.getBoolean("lsfg_enabled", false),
-                lsfgLegacyMode = preferences.getBoolean("lsfg_legacy_mode", false),
             )
     }
 
