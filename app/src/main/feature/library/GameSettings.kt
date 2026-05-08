@@ -382,7 +382,7 @@ class GameSettingsStateHolder {
     val lsfgHdrMode = mutableStateOf(false)
     val lsfgPresentModeEntries = mutableStateOf(listOf("FIFO", "Mailbox", "Immediate"))
     val lsfgSelectedPresentMode = mutableIntStateOf(0)
-    val lsfgPacingModeEntries = mutableStateOf(listOf("Disabled", "None"))
+    val lsfgPacingModeEntries = mutableStateOf(listOf("Disabled", "None", "Sleep", "Busy Wait"))
     val lsfgSelectedPacingMode = mutableIntStateOf(0)
 }
 
@@ -3820,7 +3820,10 @@ private fun LsfgSection(
 
         val pacingSummary = when (state.lsfgSelectedPacingMode.intValue) {
             0    -> stringResource(R.string.settings_lsfg_pacing_disabled_summary)
-            else -> stringResource(R.string.settings_lsfg_pacing_none_summary)
+            1    -> stringResource(R.string.settings_lsfg_pacing_none_summary)
+            2    -> stringResource(R.string.settings_lsfg_pacing_sleep_summary)
+            3    -> stringResource(R.string.settings_lsfg_pacing_busy_wait_summary)
+            else -> stringResource(R.string.settings_lsfg_pacing_disabled_summary)
         }
         Text(
             text = pacingSummary,
