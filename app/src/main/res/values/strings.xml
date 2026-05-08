@@ -1225,7 +1225,7 @@ Installed path:
 <!-- ── Sleep (index 2) ──────────────────────────────────────────────── -->
 <string name="settings_lsfg_pacing_sleep_summary">
     Sleep-based pacing. lsfg-vk measures the interval between real frames
-    and uses sleep_until() to schedule each generated frame at an evenly
+    and uses sleep_until to schedule each generated frame at an evenly
     spaced time slot. This produces a smoother perceived cadence with low
     CPU usage. Timing precision depends on the OS scheduler; occasional
     jitter is possible. Recommended as the default choice for most devices.
