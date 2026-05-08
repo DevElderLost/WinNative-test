@@ -3742,16 +3742,12 @@ private fun LsfgSection(
     val context = LocalContext.current
     val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(context)
     val isLsfgEnabled = prefs.getBoolean("lsfg_enabled", false)
-    val isLegacyMode = prefs.getBoolean("lsfg_legacy_mode", false)
 
-    if (!isLsfgEnabled || !isLegacyMode) {
-        // LSFG tidak aktif atau legacy mode tidak aktif — sembunyikan settings per-shortcut
+    if (!isLsfgEnabled) {
+        // LSFG tidak aktif — sembunyikan settings per-shortcut
         SettingGroup {
             Text(
-                text = stringResource(
-                    if (!isLsfgEnabled) R.string.settings_lsfg_disabled_info
-                    else R.string.settings_lsfg_legacy_mode_required
-                ),
+                text = stringResource(R.string.settings_lsfg_disabled_info),
                 color = TextSecondary,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(8.dp)
@@ -3760,7 +3756,7 @@ private fun LsfgSection(
         return
     }
 
-    // Legacy mode aktif — hanya settings per-shortcut (enable/disable dikontrol global)
+    // LSFG aktif — tampilkan settings per-shortcut (enable/disable dikontrol global)
     SubsectionLabel(stringResource(R.string.settings_lsfg_frame_generation))
     Spacer(Modifier.height(8.dp))
     SettingGroup {
