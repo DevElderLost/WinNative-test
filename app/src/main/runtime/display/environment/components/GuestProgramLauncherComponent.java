@@ -1164,7 +1164,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     envVars.put("LSFG_EXPERIMENTAL_PRESENT_MODE", presentMode);
     // Pacing mode — tidak bisa hot-reload, butuh swapchain recreation
     // Jika "disabled": hapus env var agar lsfg-vk tidak mengaktifkan pacing
-    if ("disabled".equals(pacingMode, true)) {
+    if ("disabled".equalsIgnoreCase(pacingMode)) {
       envVars.remove("LSFGVK_PACING");
     } else {
       envVars.put("LSFGVK_PACING", pacingMode);
