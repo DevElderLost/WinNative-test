@@ -322,6 +322,7 @@ data class XServerDrawerState(
     val lsfgPerformanceMode: Boolean = true,
     val lsfgHdrMode: Boolean = false,
     val lsfgPresentModeIndex: Int = 0,
+    val lsfgPacingModeIndex: Int = 0,
     val lsfgDllPath: String = "",
     val inputControlsProfileNames: List<String> = emptyList(),
     val inputControlsSelectedProfileIndex: Int = 0,
@@ -504,6 +505,7 @@ interface XServerDrawerActionListener {
     fun onLsfgPerformanceModeChanged(enabled: Boolean)
     fun onLsfgHdrModeChanged(enabled: Boolean)
     fun onLsfgPresentModeSelected(index: Int)
+    fun onLsfgPacingModeSelected(index: Int)
 
     fun onInputControlsProfileSelected(index: Int)
 
@@ -582,6 +584,7 @@ fun buildXServerDrawerState(
     lsfgPerformanceMode: Boolean = true,
     lsfgHdrMode: Boolean = false,
     lsfgPresentModeIndex: Int = 0,
+    lsfgPacingModeIndex: Int = 0,
     lsfgDllPath: String = "",
     inputControlsProfileNames: List<String> = emptyList(),
     inputControlsSelectedProfileIndex: Int = 0,
@@ -753,6 +756,7 @@ fun buildXServerDrawerState(
         lsfgPerformanceMode = lsfgPerformanceMode,
         lsfgHdrMode = lsfgHdrMode,
         lsfgPresentModeIndex = lsfgPresentModeIndex,
+        lsfgPacingModeIndex = lsfgPacingModeIndex,
         lsfgDllPath = lsfgDllPath,
         inputControlsProfileNames = inputControlsProfileNames,
         inputControlsSelectedProfileIndex = inputControlsSelectedProfileIndex,

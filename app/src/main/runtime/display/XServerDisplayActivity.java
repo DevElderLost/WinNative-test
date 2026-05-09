@@ -3054,6 +3054,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 preferences.getBoolean("lsfg_performance_mode", true),
                 preferences.getBoolean("lsfg_hdr_mode", false),
                 lsfgPresentModeStringToIndex(preferences.getString("lsfg_present_mode", "fifo")),
+                lsfgPacingModeStringToIndex(preferences.getString("lsfg_pacing_mode", "disabled")),
                 preferences.getString("lsfg_dll_path", "") != null ? preferences.getString("lsfg_dll_path", "") : "",
                 inputProfileNames,
                 inputSelectedIndex,
@@ -3277,6 +3278,15 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                         String[] modes = {"fifo", "mailbox", "immediate"};
                         String mode = (index >= 0 && index < modes.length) ? modes[index] : "fifo";
                         preferences.edit().putString("lsfg_present_mode", mode).apply();
+                        updateLsfgConfig();
+                        renderDrawerMenu();
+                    }
+
+                    @Override
+                    public void onLsfgPacingModeSelected(int index) {
+                        String[] modes = {"disabled", "none", "sleep", "busy_wait"};
+                        String mode = (index >= 0 && index < modes.length) ? modes[index] : "disabled";
+                        preferences.edit().putString("lsfg_pacing_mode", mode).apply();
                         updateLsfgConfig();
                         renderDrawerMenu();
                     }
@@ -6684,9 +6694,44 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         }
     }
 
+    private static int lsfgPacingModeStringToIndex(String mode) {
+        if (mode == null) return 0;
+        switch (mode.toLowerCase(java.util.Locale.ROOT)) {
+            case "none":      return 1;
+            case "sleep":     return 2;
+            case "busy_wait": return 3;
+            default:          return 0; // disabled
+        }
+    }
+
     private void prepareLsfgRuntime() {
         if (imageFs == null) return;
         boolean enabled = preferences.getBoolean("lsfg_enabled", false);
+
+        // Sync shortcut LSFG extras ke prefs global agar drawer menu reflect nilai
+        // yang benar-benar dipakai untuk sesi ini.
+        if (enabled && shortcut != null) {
+            android.content.SharedPreferences.Editor ed = preferences.edit();
+            String scMult = shortcut.getExtra("lsfgMultiplier", null);
+            if (scMult != null) {
+                int m = Integer.parseInt(scMult);
+                ed.putInt("lsfg_multiplier", Math.max(2, Math.min(4, m)));
+            }
+            String scFlow = shortcut.getExtra("lsfgFlowScale", null);
+            if (scFlow != null) {
+                float f = Float.parseFloat(scFlow);
+                ed.putFloat("lsfg_flow_scale", Math.max(0.25f, Math.min(1.0f, f)));
+            }
+            String scPerf = shortcut.getExtra("lsfgPerformanceMode", null);
+            if (scPerf != null) ed.putBoolean("lsfg_performance_mode", "1".equals(scPerf));
+            String scHdr = shortcut.getExtra("lsfgHdrMode", null);
+            if (scHdr != null) ed.putBoolean("lsfg_hdr_mode", "1".equals(scHdr));
+            String scPresent = shortcut.getExtra("lsfgPresentMode", null);
+            if (scPresent != null) ed.putString("lsfg_present_mode", scPresent);
+            String scPacing = shortcut.getExtra("lsfgPacingMode", null);
+            if (scPacing != null) ed.putString("lsfg_pacing_mode", scPacing);
+            ed.apply();
+        }
 
         File rootDir = imageFs.getRootDir();
         String containerHome = rootDir.getPath() + "/home/xuser";
@@ -6791,6 +6836,14 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             case "immediate": presentMode = "immediate"; break;
             default:          presentMode = "fifo";      break;
         }
+        String pacingMode;
+        String prefPacing = preferences.getString("lsfg_pacing_mode", "disabled");
+        switch (prefPacing != null ? prefPacing.toLowerCase(java.util.Locale.ROOT) : "disabled") {
+            case "none":      pacingMode = "none";      break;
+            case "sleep":     pacingMode = "sleep";     break;
+            case "busy_wait": pacingMode = "busy_wait"; break;
+            default:          pacingMode = "disabled";  break;
+        }
 
         String processName = "";
         if (guestProgramLauncherComponent != null) {
@@ -6817,6 +6870,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             toml.append("performance_mode = ").append(perfMode ? "true" : "false").append("\n");
             toml.append("hdr_mode = ").append(hdrMode ? "true" : "false").append("\n");
             toml.append("present_mode = \"").append(presentMode).append("\"\n");
+            if (!"disabled".equalsIgnoreCase(pacingMode)) {
+                toml.append("pacing_mode = \"").append(pacingMode).append("\"\n");
+            }
         }
         com.winlator.cmod.shared.io.FileUtils.writeString(confToml, toml.toString());
         Log.d("XServerDisplayActivity", "LSFG config updated: mult=" + multiplier + " flow=" + flowScale);
