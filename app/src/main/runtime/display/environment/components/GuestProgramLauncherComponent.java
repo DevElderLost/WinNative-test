@@ -1173,11 +1173,11 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
     envVars.put("LSFG_HDR_MODE", hdrMode ? "1" : "0");
     // Legacy mode: aktifkan LSFG_LEGACY=1 (menonaktifkan hot-reload conf.toml,
     // settings dikontrol per-shortcut dari GameSettings)
-    if (legacyMode) {
-      envVars.put("LSFG_LEGACY", "1");
-    } else {
-      envVars.remove("LSFG_LEGACY");
-    }
+//    if (legacyMode) {
+//      envVars.put("LSFG_LEGACY", "1");
+//    } else {
+//      envVars.remove("LSFG_LEGACY");
+//    }
     if (!processName.isEmpty()) {
       envVars.put("LSFG_PROCESS", processName);
       envVars.put("LSFG_PROCESS_EXE", processName);
