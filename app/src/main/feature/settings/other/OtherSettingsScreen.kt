@@ -1118,6 +1118,7 @@ private fun LsfgToggleCard(
     // AnimatedVisibility — tanpa ini konten animasi pakai snapshot state lama
     // saat toggle diubah, sehingga nama DLL berbeda antara switch row dan import row.
     val currentDllPath by rememberUpdatedState(dllPath)
+    val currentLegacyMode by rememberUpdatedState(legacyMode)
     val hasFile = currentDllPath.isNotBlank()
     // Tampilkan nama file lengkap persis seperti yang tersimpan di path,
     // mis. "global-1777952628276-Lossless.dll"
