@@ -1118,12 +1118,14 @@ private fun LsfgToggleCard(
     // AnimatedVisibility — tanpa ini konten animasi pakai snapshot state lama
     // saat toggle diubah, sehingga nama DLL berbeda antara switch row dan import row.
     val currentDllPath by rememberUpdatedState(dllPath)
-    val currentLegacyMode by rememberUpdatedState(legacyMode)
     val hasFile = currentDllPath.isNotBlank()
+    // Tampilkan nama file lengkap persis seperti yang tersimpan di path,
+    // mis. "global-1777952628276-Lossless.dll"
     val displayName = if (hasFile)
         currentDllPath.substringAfterLast('/').substringAfterLast('\\')
             .replaceFirst(Regex("^.*?-\\d{10,}-"), "")
             .ifBlank { currentDllPath.substringAfterLast('/').substringAfterLast('\\') }
+            .ifBlank { currentDllPath }
     else ""
 
     Column(
@@ -1164,7 +1166,7 @@ private fun LsfgToggleCard(
                 )
                 Text(
                     text = if (enabled)
-                        if (hasFile) displayName
+                        if (hasFile) stringResource(R.string.common_ui_enabled)
                         else stringResource(R.string.settings_lsfg_no_dll_imported)
                     else stringResource(R.string.common_ui_disabled),
                     color = if (enabled && hasFile) Accent else TextSecondary,
@@ -1238,12 +1240,6 @@ private fun LsfgToggleCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.settings_lsfg_lossless_dll),
-                            color = TextPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                        )
                         Text(
                             text = if (hasFile) displayName
                                    else stringResource(R.string.settings_lsfg_no_dll_imported),
