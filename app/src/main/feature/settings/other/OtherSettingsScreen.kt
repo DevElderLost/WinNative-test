@@ -1157,7 +1157,7 @@ private fun LsfgToggleCard(
                 )
                 Text(
                     text = if (enabled)
-                        if (hasFile) displayName
+                        if (hasFile) stringResource(R.string.common_ui_enabled)
                         else stringResource(R.string.settings_lsfg_no_dll_imported)
                     else stringResource(R.string.common_ui_disabled),
                     color = if (enabled && hasFile) Accent else TextSecondary,
@@ -1192,13 +1192,7 @@ private fun LsfgToggleCard(
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.settings_lsfg_lossless_dll),
-                            color = TextPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                        )
+                    Column(modifier = Modifier.weight(1f)) {                
                         Text(
                             text = if (hasFile) displayName
                                    else stringResource(R.string.settings_lsfg_no_dll_imported),
