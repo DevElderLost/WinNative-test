@@ -289,6 +289,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     private int taskAffinityMask = 0;
     private int taskAffinityMaskWoW64 = 0;
     private int frameRatingWindowId = -1;
+    private android.net.wifi.WifiManager.MulticastLock multicastLock;
     private final float[] xform = XForm.getInstance();
     private ContentsManager contentsManager;
     private boolean navigationFocused = false;
@@ -613,6 +614,18 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         ControllerManager.getInstance().init(this);
 
         preloaderDialog = new PreloaderDialog(this);
+
+        try {
+            android.net.wifi.WifiManager wifiManager = (android.net.wifi.WifiManager)
+                    getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wifiManager != null) {
+                multicastLock = wifiManager.createMulticastLock("winnative-xserver");
+                multicastLock.setReferenceCounted(false);
+                multicastLock.acquire();
+            }
+        } catch (Exception e) {
+            Log.w("XServerDisplayActivity", "Failed to acquire MulticastLock", e);
+        }
 
         dualSeriesBattery = preferences.getBoolean(FrameRating.PREF_HUD_DUAL_SERIES_BATTERY, false);
 
@@ -2934,6 +2947,11 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         if (preloaderDialog != null) {
             preloaderDialog.close();
         }
+        if (multicastLock != null && multicastLock.isHeld()) {
+            try {
+                multicastLock.release();
+            } catch (Exception ignored) {}
+        }
         super.onDestroy();
         // Schedule a deferred update check 10 s after game exit
         if (!switchLaunchInProgress.get()) {
@@ -3362,7 +3380,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     @Override
                     public void onInputControlsShowOverlayChanged(boolean enabled) {
                         if (inputControlsView != null) inputControlsView.setShowTouchscreenControls(enabled);
-                        preferences.edit().putBoolean("show_touchscreen_controls_enabled", enabled).apply();
+                        preferences.edit().putBoolean("show_touchscreen_controls_enabled", enabled).commit();
                         renderDrawerMenu();
                     }
 
@@ -3370,25 +3388,26 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     public void onInputControlsTapToClickChanged(boolean enabled) {
                         isTapToClickEnabled = enabled;
                         if (touchpadView != null) touchpadView.setTapToClickEnabled(enabled);
+                        preferences.edit().putBoolean("tap_to_click_enabled", enabled).commit();
                         renderDrawerMenu();
                     }
 
                     @Override
                     public void onInputControlsOverlayOpacityChanged(float opacity) {
                         if (inputControlsView != null) inputControlsView.setOverlayOpacity(opacity);
-                        preferences.edit().putFloat("overlay_opacity", opacity).apply();
+                        preferences.edit().putFloat("overlay_opacity", opacity).commit();
                         renderDrawerMenu();
                     }
 
                     @Override
                     public void onInputControlsTouchscreenHapticsChanged(boolean enabled) {
-                        preferences.edit().putBoolean("touchscreen_haptics_enabled", enabled).apply();
+                        preferences.edit().putBoolean("touchscreen_haptics_enabled", enabled).commit();
                         renderDrawerMenu();
                     }
 
                     @Override
                     public void onInputControlsGamepadVibrationChanged(boolean enabled) {
-                        preferences.edit().putBoolean(ControllerManager.PREF_VIBRATION_GLOBAL, enabled).apply();
+                        preferences.edit().putBoolean(ControllerManager.PREF_VIBRATION_GLOBAL, enabled).commit();
                         if (winHandler != null) winHandler.setGlobalVibrationEnabled(enabled);
                         renderDrawerMenu();
                     }
