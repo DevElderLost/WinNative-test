@@ -1184,6 +1184,7 @@ return boundingBox;
           inputControlsView.handleInputEvent(binding, state, value);
           this.states[i] = state;
         }
+        inputControlsView.invalidate();
       }
 
       return true;
