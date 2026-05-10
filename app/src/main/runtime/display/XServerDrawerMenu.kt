@@ -3458,6 +3458,8 @@ private fun CompactSlider(
     valueRange: ClosedFloatingPointRange<Float>,
     steps: Int,
 ) {
+    var sliderValue by remember(value) { mutableStateOf(value) }
+
     val sliderColors =
         SliderDefaults.colors(
             thumbColor = DrawerAccent,
@@ -3471,8 +3473,11 @@ private fun CompactSlider(
         contentAlignment = Alignment.Center,
     ) {
         Slider(
-            value = value,
-            onValueChange = onValueChange,
+            value = sliderValue,
+            onValueChange = {
+                sliderValue = it
+                onValueChange(it)
+            },
             valueRange = valueRange,
             steps = steps,
             modifier = Modifier.fillMaxWidth(0.96f).requiredHeight(20.dp),
