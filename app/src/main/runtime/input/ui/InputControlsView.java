@@ -421,7 +421,7 @@ public class InputControlsView extends View {
       int activePointerId = activeTouchElements.keyAt(i);
       ControlElement activeElement = activeTouchElements.valueAt(i);
       if (activeElement != null) {
-        activeElement.handleTouchUp(activePointerId);
+        activeElement.handleTouchCancel(activePointerId);
       }
     }
     activeTouchElements.clear();
@@ -706,22 +706,27 @@ public class InputControlsView extends View {
             for (ControlElement element : profile.getElements()) {
               if (element.handleTouchDown(pointerId, x, y)) {
                 handled = true;
-                activeTouchElements.put(pointerId, element);
+                // Hanya daftarkan pointerId baru jika elemen ini belum dimiliki pointer lain.
+                // Jika elemen sudah aktif (jari ke-2 menyentuh area elemen yang sama),
+                // jangan overwrite activeTouchElements — pointer utama tetap pemegang elemen.
+                if (activeTouchElements.indexOfValue(element) < 0) {
+                  activeTouchElements.put(pointerId, element);
 
-                // Trigger haptic feedback for input controls
-                if (hapticsEnabled) {
-                  Vibrator vibrator;
-                  if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                    VibratorManager vibratorManager =
-                        getContext().getSystemService(VibratorManager.class);
-                    vibrator =
-                        vibratorManager != null ? vibratorManager.getDefaultVibrator() : null;
-                  } else {
-                    vibrator = getContext().getSystemService(Vibrator.class);
-                  }
-                  if (vibrator != null && vibrator.hasVibrator()) {
-                    vibrator.vibrate(
-                        VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE));
+                  // Haptic hanya untuk sentuhan pertama ke elemen
+                  if (hapticsEnabled) {
+                    Vibrator vibrator;
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                      VibratorManager vibratorManager =
+                          getContext().getSystemService(VibratorManager.class);
+                      vibrator =
+                          vibratorManager != null ? vibratorManager.getDefaultVibrator() : null;
+                    } else {
+                      vibrator = getContext().getSystemService(Vibrator.class);
+                    }
+                    if (vibrator != null && vibrator.hasVibrator()) {
+                      vibrator.vibrate(
+                          VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE));
+                    }
                   }
                 }
                 break;
@@ -762,14 +767,9 @@ public class InputControlsView extends View {
             if (activeElement != null) {
               handled = activeElement.handleTouchUp(pointerId, x, y);
               activeTouchElements.remove(pointerId);
-            } else {
-              for (ControlElement element : profile.getElements()) {
-                if (element.handleTouchUp(pointerId, x, y)) {
-                  handled = true;
-                  break;
-                }
-              }
             }
+            // Tidak ada fallback loop — pointer yang tidak terdaftar di activeTouchElements
+            // berarti menyentuh area kosong, jangan paksa handleTouchUp ke elemen aktif manapun.
             if (!handled) dispatchUnhandledTouch(event);
             break;
           }
