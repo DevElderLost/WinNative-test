@@ -615,6 +615,8 @@ E.g. <b>META</b> for <i>META key</i>, \n
     <string name="session_drawer_pause_resume">Pause/Resume</string>
     <string name="session_drawer_relative_mouse_movement">Relative Mouse Movement</string>
     <string name="session_drawer_mouse_input">Mouse Input</string>
+    <string name="session_drawer_simulated_touch">Simulated Touch</string>
+    <string name="session_drawer_rail_label_simulated_touch">Sim Touch</string>
     <string name="session_drawer_screen_effects">Screen Effects</string>
     <string name="session_drawer_screen_effects_subtitle">Upscaling and color effects</string>
     <string name="session_drawer_super_resolution">Sharpening Filters</string>
