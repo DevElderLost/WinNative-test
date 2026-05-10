@@ -83,6 +83,7 @@ import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.ZoomIn
+import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -330,6 +331,7 @@ data class XServerDrawerState(
     val inputControlsOverlayOpacity: Float = 0.4f,
     val inputControlsTouchscreenHaptics: Boolean = false,
     val inputControlsGamepadVibration: Boolean = true,
+    val simulatedTouchEnabled: Boolean = false,
 )
 
 class XServerDrawerStateHolder(
@@ -516,6 +518,8 @@ interface XServerDrawerActionListener {
 
     fun onInputControlsGamepadVibrationChanged(enabled: Boolean)
 
+    fun onSimulatedTouchChanged(enabled: Boolean)
+
     fun onInputControlsEditClick()
 
     fun onTaskManagerVisibilityChanged(visible: Boolean)
@@ -589,6 +593,7 @@ fun buildXServerDrawerState(
     inputControlsTouchscreenHaptics: Boolean = false,
     inputControlsGamepadVibration: Boolean = true,
     fullscreenEnabled: Boolean = false,
+    simulatedTouchEnabled: Boolean = false,
 ): XServerDrawerState {
     val items =
         mutableListOf(
@@ -635,6 +640,14 @@ fun buildXServerDrawerState(
                     if (mouseDisabled) context.getString(R.string.common_ui_disabled) else context.getString(R.string.common_ui_enabled),
                 icon = Icons.Outlined.Mouse,
                 active = !mouseDisabled,
+            ),
+            XServerDrawerItem(
+                itemId = R.id.main_menu_simulated_touch,
+                title = context.getString(R.string.session_drawer_simulated_touch),
+                subtitle =
+                    if (simulatedTouchEnabled) context.getString(R.string.common_ui_enabled) else context.getString(R.string.common_ui_disabled),
+                icon = Icons.Outlined.TouchApp,
+                active = simulatedTouchEnabled,
             ),
             XServerDrawerItem(
                 itemId = R.id.main_menu_toggle_fullscreen,
@@ -751,6 +764,7 @@ fun buildXServerDrawerState(
         inputControlsOverlayOpacity = inputControlsOverlayOpacity,
         inputControlsTouchscreenHaptics = inputControlsTouchscreenHaptics,
         inputControlsGamepadVibration = inputControlsGamepadVibration,
+        simulatedTouchEnabled = simulatedTouchEnabled,
     )
 }
 
@@ -1164,6 +1178,7 @@ private fun ActionCardGrid(
                             R.id.main_menu_logs -> onOpenLogs()
                             R.id.main_menu_relative_mouse_movement,
                             R.id.main_menu_disable_mouse,
+                            R.id.main_menu_simulated_touch,
                             R.id.main_menu_toggle_fullscreen -> listener.onActionSelected(item.itemId)
                             else -> listener.onActionSelected(item.itemId)
                         }
@@ -1432,6 +1447,7 @@ private fun railLabelResFor(itemId: Int): Int? =
         R.id.main_menu_input_controls -> R.string.session_drawer_rail_label_input_controls
         R.id.main_menu_relative_mouse_movement -> R.string.session_drawer_rail_label_relative_mouse
         R.id.main_menu_disable_mouse -> R.string.session_drawer_rail_label_mouse
+        R.id.main_menu_simulated_touch -> R.string.session_drawer_rail_label_simulated_touch
         R.id.main_menu_toggle_fullscreen -> R.string.session_drawer_rail_label_fullscreen
         R.id.main_menu_pip_mode -> R.string.session_drawer_rail_label_pip
         R.id.main_menu_native_rendering -> R.string.session_drawer_rail_label_native

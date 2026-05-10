@@ -277,6 +277,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     private boolean isPointerCaptureForcedOff = false;
     private boolean isVolumeUpPressed = false;
     private boolean isVolumeDownPressed = false;
+    private boolean isSimulatedTouchEnabled = false;
     private OnExtractFileListener onExtractFileListener;
     private WinHandler winHandler;
     private WineRequestHandler wineRequestHandler;
@@ -3128,7 +3129,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 preferences.getFloat("overlay_opacity", InputControlsView.DEFAULT_OVERLAY_OPACITY),
                 preferences.getBoolean("touchscreen_haptics_enabled", false),
                 preferences.getBoolean(ControllerManager.PREF_VIBRATION_GLOBAL, true),
-                xServerView != null && xServerView.getRenderer() != null && xServerView.getRenderer().isFullscreen()
+                xServerView != null && xServerView.getRenderer() != null && xServerView.getRenderer().isFullscreen(),
+                isSimulatedTouchEnabled
         );
 
         if (drawerActionListener == null) {
@@ -3457,6 +3459,13 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     @Override
                     public void onLogsShare() {
                         shareLogStream();
+                    }
+
+                    @Override
+                    public void onSimulatedTouchChanged(boolean enabled) {
+                        isSimulatedTouchEnabled = enabled;
+                        if (touchpadView != null) touchpadView.setSimTouchScreen(enabled);
+                        renderDrawerMenu();
                     }
                 };
         }
@@ -3799,6 +3808,11 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 touchpadView.setMouseEnabled(!isMouseDisabled);
                 renderDrawerMenu();
                 break;
+            case R.id.main_menu_simulated_touch:
+                isSimulatedTouchEnabled = !isSimulatedTouchEnabled;
+                if (touchpadView != null) touchpadView.setSimTouchScreen(isSimulatedTouchEnabled);
+                renderDrawerMenu();
+                break;
             case R.id.main_menu_toggle_fullscreen:
                 renderer.toggleFullscreen();
                 touchpadView.toggleFullscreen();
@@ -3875,6 +3889,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             case R.id.main_menu_fps_monitor:
             case R.id.main_menu_relative_mouse_movement:
             case R.id.main_menu_disable_mouse:
+            case R.id.main_menu_simulated_touch:
             case R.id.main_menu_toggle_fullscreen:
             case R.id.main_menu_magnifier:
                 return true;
@@ -4636,7 +4651,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             }
 
             String simTouchScreen = shortcut.getExtra("simTouchScreen");
-            touchpadView.setSimTouchScreen(simTouchScreen.equals("1"));
+            boolean simTouchEnabled = simTouchScreen.equals("1");
+            touchpadView.setSimTouchScreen(simTouchEnabled);
+            isSimulatedTouchEnabled = simTouchEnabled;
         }
 
         startTouchscreenTimeout();
