@@ -1124,11 +1124,9 @@ private fun LsfgToggleCard(
     // mis. "global-1777952628276-Lossless.dll"
     val displayName = if (hasFile)
         currentDllPath.substringAfterLast('/').substringAfterLast('\\')
-            .replaceFirst(Regex("^.*?-\\d{10,}-"), "")
-            .ifBlank { currentDllPath.substringAfterLast('/').substringAfterLast('\\') }
             .ifBlank { currentDllPath }
     else ""
-
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
