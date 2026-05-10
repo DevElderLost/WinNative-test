@@ -93,6 +93,9 @@ public class ControlElement {
   private boolean isRadialBindingCurrentlyHeld = false;
   private boolean wasExpandedOnDown = false;
   private int currentPointerId = -1;
+  // Jumlah jari yang sedang aktif menyentuh area elemen ini (multi-touch tracking)
+  private int activePointerCount = 0;
+  private boolean isPressed = false;
   private final Rect boundingBox = new Rect();
   private final Path path = new Path();
   private Path[] paths;
@@ -428,7 +431,7 @@ return boundingBox;
   }
 
   private boolean isEngaged() {
-    return currentPointerId != -1 || (toggleSwitch && selected);
+    return isPressed || (toggleSwitch && selected);
   }
 
   public void draw(Canvas canvas) {
@@ -938,6 +941,15 @@ return boundingBox;
   }
 
   public boolean handleTouchDown(int pointerId, float x, float y) {
+    if (containsPoint(x, y)) {
+      // Jari tambahan menyentuh area elemen yang sudah aktif → hitung saja,
+      // jangan reset binding yang sedang ditekan oleh jari pertama.
+      if (currentPointerId != -1 && currentPointerId != pointerId) {
+        activePointerCount++;
+        return true; // Konsumsi event agar sistem tidak salah interpretasi
+      }
+    }
+
     if (currentPointerId == -1 && containsPoint(x, y)) {
       if (type != Type.RANGE_BUTTON && type != Type.RADIAL_MENU) {
         boolean hasBinding = false;
@@ -951,6 +963,8 @@ return boundingBox;
       }
 
       currentPointerId = pointerId;
+      activePointerCount = 1;
+      isPressed = true;
       if (type == Type.BUTTON) {
         if (isKeepButtonPressedAfterMinTime()) touchTime = System.currentTimeMillis();
         if (!toggleSwitch || !selected) {
@@ -1002,7 +1016,10 @@ return boundingBox;
   public boolean handleTouchMove(int pointerId, float x, float y) {
     if (pointerId == currentPointerId && type == Type.BUTTON) {
       if (!containsPoint(x, y)) {
-        handleTouchUp(pointerId, x, y);
+        // Lepas tombol hanya jika tidak ada jari lain yang masih menyentuh area ini
+        if (activePointerCount <= 1) {
+          handleTouchUp(pointerId, x, y);
+        }
       }
       return true;
     }
@@ -1195,7 +1212,21 @@ return boundingBox;
   }
 
   public boolean handleTouchUp(int pointerId, float x, float y) {
-    if (pointerId != currentPointerId) return false;
+    // Jika bukan pointer utama tapi masih dalam hitungan aktif, kurangi counter saja
+    if (pointerId != currentPointerId) {
+      if (activePointerCount > 1) {
+        activePointerCount = Math.max(0, activePointerCount - 1);
+        return false;
+      }
+      return false;
+    }
+
+    // Jika masih ada jari lain di area elemen, jangan lepas binding
+    if (activePointerCount > 1) {
+      activePointerCount = Math.max(0, activePointerCount - 1);
+      // Jangan reset currentPointerId — binding tetap aktif
+      return true;
+    }
 
     if (type == Type.BUTTON) {
       final Binding binding = getBindingAt(0);
@@ -1264,6 +1295,8 @@ return boundingBox;
       inputControlsView.invalidate();
     }
 
+    isPressed = false;
+    activePointerCount = 0;
     currentPointerId = -1;
     return true;
   }
@@ -1312,6 +1345,51 @@ return boundingBox;
 
   public boolean handleTouchUp(int pointerId) {
     return handleTouchUp(pointerId, 0, 0);
+  }
+
+  /**
+   * Dipanggil saat Android mengirim ACTION_CANCEL — misalnya saat sistem mengambil alih
+   * gesture (scroll, notification bar), atau saat jari lain menyebabkan pointer capture berubah.
+   * Tanpa ini, stick/button bisa stuck di state "ditekan" sampai disentuh ulang.
+   *
+   * Jika pointerId == -1, force-cancel semua state tanpa mengecek currentPointerId
+   * (dipakai untuk global cancel dari InputControlsView).
+   */
+  public void handleTouchCancel(int pointerId) {
+    if (pointerId == -1 || pointerId == currentPointerId) {
+      isPressed = false;
+      activePointerCount = 0;
+
+      // Release semua binding yang sedang aktif
+      for (byte i = 0; i < states.length; i++) {
+        if (states[i]) inputControlsView.handleInputEvent(getBindingAt(i), false);
+        states[i] = false;
+      }
+
+      if (type == Type.STICK) {
+        Binding firstBinding = getBindingAt(0);
+        if (firstBinding.isGamepad()) {
+          inputControlsView.handleStickInput(firstBinding, 0.0f, 0.0f);
+        }
+        currentPosition = null;
+      } else if (type == Type.TRACKPAD) {
+        Binding firstBinding = getBindingAt(0);
+        if (firstBinding.isGamepad()) {
+          inputControlsView.handleStickInput(firstBinding, 0.0f, 0.0f);
+        }
+        currentPosition = null;
+      } else if (type == Type.RANGE_BUTTON) {
+        scroller.handleTouchUp();
+      } else if (type == Type.BUTTON) {
+        // Pastikan semua binding button juga di-release saat cancel
+        for (Binding b : bindings) {
+          if (b != Binding.NONE) inputControlsView.handleInputEvent(b, false);
+        }
+      }
+
+      currentPointerId = -1;
+      inputControlsView.invalidate();
+    }
   }
 
   public PointF getCurrentPosition() {
