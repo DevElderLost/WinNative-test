@@ -27,6 +27,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import androidx.preference.PreferenceManager;
 import com.winlator.cmod.R;
 import com.winlator.cmod.runtime.display.winhandler.MouseEventFlags;
@@ -79,6 +81,12 @@ public class InputControlsView extends View {
   private ControlElement stickElement;
 
   private boolean focusOnStick = false; // A flag to determine if we are focusing on the stick
+
+  private boolean batchingUpdates = false;
+
+  public boolean isBatchingUpdates() {
+    return batchingUpdates;
+  }
 
   public boolean isFocusedOnStick() {
     return focusOnStick;
@@ -421,6 +429,8 @@ public class InputControlsView extends View {
       int activePointerId = activeTouchElements.keyAt(i);
       ControlElement activeElement = activeTouchElements.valueAt(i);
       if (activeElement != null) {
+        // Gunakan handleTouchCancel agar activePointerCount direset paksa,
+        // sehingga elemen tidak stuck saat ACTION_CANCEL terjadi.
         activeElement.handleTouchCancel(activePointerId);
       }
     }
@@ -694,7 +704,7 @@ public class InputControlsView extends View {
       int actionIndex = event.getActionIndex();
       int pointerId = event.getPointerId(actionIndex);
       int actionMasked = event.getActionMasked();
-      boolean handled = false;
+      boolean eventHandled = false;
 
       switch (actionMasked) {
         case MotionEvent.ACTION_DOWN:
@@ -703,59 +713,92 @@ public class InputControlsView extends View {
             float x = event.getX(actionIndex);
             float y = event.getY(actionIndex);
 
-            for (ControlElement element : profile.getElements()) {
-              if (element.handleTouchDown(pointerId, x, y)) {
-                handled = true;
-                // Hanya daftarkan pointerId baru jika elemen ini belum dimiliki pointer lain.
-                // Jika elemen sudah aktif (jari ke-2 menyentuh area elemen yang sama),
-                // jangan overwrite activeTouchElements — pointer utama tetap pemegang elemen.
-                if (activeTouchElements.indexOfValue(element) < 0) {
-                  activeTouchElements.put(pointerId, element);
-
-                  // Haptic hanya untuk sentuhan pertama ke elemen
-                  if (hapticsEnabled) {
-                    Vibrator vibrator;
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                      VibratorManager vibratorManager =
-                          getContext().getSystemService(VibratorManager.class);
-                      vibrator =
-                          vibratorManager != null ? vibratorManager.getDefaultVibrator() : null;
-                    } else {
-                      vibrator = getContext().getSystemService(Vibrator.class);
-                    }
-                    if (vibrator != null && vibrator.hasVibrator()) {
-                      vibrator.vibrate(
-                          VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE));
-                    }
-                  }
-                }
-                break;
+            if (stickElement != null && stickElement.handleTouchDown(pointerId, x, y)) {
+              eventHandled = true;
+              // Hanya daftarkan jika stickElement belum dimiliki pointer lain
+              if (activeTouchElements.indexOfValue(stickElement) < 0) {
+                activeTouchElements.put(pointerId, stickElement);
               }
             }
-            if (!handled) dispatchUnhandledTouch(event);
+
+            if (!eventHandled) {
+              for (ControlElement element : profile.getElements()) {
+                if (element.handleTouchDown(pointerId, x, y)) {
+                  eventHandled = true;
+                  // Hanya daftarkan jika elemen belum dimiliki pointer lain.
+                  // Jari ke-2 yang menyentuh area elemen yang sama tidak overwrite pointer utama.
+                  if (activeTouchElements.indexOfValue(element) < 0) {
+                    activeTouchElements.put(pointerId, element);
+
+                    // Haptic hanya untuk sentuhan pertama ke elemen
+                    if (hapticsEnabled) {
+                      Vibrator vibrator;
+                      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                        VibratorManager vibratorManager =
+                            getContext().getSystemService(VibratorManager.class);
+                        vibrator =
+                            vibratorManager != null ? vibratorManager.getDefaultVibrator() : null;
+                      } else {
+                        vibrator = getContext().getSystemService(Vibrator.class);
+                      }
+                      if (vibrator != null && vibrator.hasVibrator()) {
+                        vibrator.vibrate(
+                            VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE));
+                      }
+                    }
+                  }
+                  break;
+                }
+              }
+            }
+            if (!eventHandled) dispatchUnhandledTouch(event);
+            syncCapturedPointers();
             break;
           }
         case MotionEvent.ACTION_MOVE:
           {
+            batchingUpdates = true;
+            boolean anyControlHandled = false;
+            boolean unhandledPointerExists = false;
+
             for (byte i = 0, count = (byte) event.getPointerCount(); i < count; i++) {
               int movePointerId = event.getPointerId(i);
               float x = event.getX(i);
               float y = event.getY(i);
 
               ControlElement activeElement = activeTouchElements.get(movePointerId);
-              handled = activeElement != null && activeElement.handleTouchMove(movePointerId, x, y);
+              boolean pointerHandled =
+                  activeElement != null && activeElement.handleTouchMove(movePointerId, x, y);
 
-              if (!handled && activeElement == null) {
-                for (ControlElement element : profile.getElements()) {
-                  if (element.handleTouchMove(movePointerId, x, y)) {
-                    activeTouchElements.put(movePointerId, element);
-                    handled = true;
-                    break;
+              if (!pointerHandled && activeElement == null) {
+                if (stickElement != null && stickElement.handleTouchMove(movePointerId, x, y)) {
+                  activeTouchElements.put(movePointerId, stickElement);
+                  pointerHandled = true;
+                }
+
+                if (!pointerHandled) {
+                  for (ControlElement element : profile.getElements()) {
+                    if (element.handleTouchMove(movePointerId, x, y)) {
+                      activeTouchElements.put(movePointerId, element);
+                      pointerHandled = true;
+                      break;
+                    }
                   }
                 }
               }
-              if (!handled) dispatchUnhandledTouch(event);
+
+              if (pointerHandled) anyControlHandled = true;
+              else unhandledPointerExists = true;
             }
+
+            batchingUpdates = false;
+            WinHandler winHandler = xServer != null ? xServer.getWinHandler() : null;
+            if (anyControlHandled && winHandler != null) {
+              winHandler.sendGamepadState();
+            }
+
+            if (unhandledPointerExists) dispatchUnhandledTouch(event);
+            syncCapturedPointers();
             break;
           }
         case MotionEvent.ACTION_UP:
@@ -765,23 +808,37 @@ public class InputControlsView extends View {
             float x = event.getX(actionIndex);
             float y = event.getY(actionIndex);
             if (activeElement != null) {
-              handled = activeElement.handleTouchUp(pointerId, x, y);
+              eventHandled = activeElement.handleTouchUp(pointerId, x, y);
               activeTouchElements.remove(pointerId);
+            } else if (stickElement != null && stickElement.handleTouchUp(pointerId, x, y)) {
+              // stickElement dinamis (floating stick) tidak selalu ada di activeTouchElements
+              eventHandled = true;
             }
-            // Tidak ada fallback loop — pointer yang tidak terdaftar di activeTouchElements
-            // berarti menyentuh area kosong, jangan paksa handleTouchUp ke elemen aktif manapun.
-            if (!handled) dispatchUnhandledTouch(event);
+            // Tidak ada fallback loop ke semua elemen — pointer yang tidak terdaftar
+            // berarti menyentuh area kosong. Fallback loop bisa memicu handleTouchUp
+            // secara tidak sengaja ke stick/button yang sedang aktif.
+            if (!eventHandled) dispatchUnhandledTouch(event);
+            syncCapturedPointers();
             break;
           }
         case MotionEvent.ACTION_CANCEL:
           {
             releaseActiveTouchElements();
             dispatchUnhandledTouch(event);
+            syncCapturedPointers();
             break;
           }
       }
     }
     return true;
+  }
+
+  private void syncCapturedPointers() {
+    if (touchpadView != null) {
+      Set<Integer> pointerIds = new HashSet<>();
+      for (int i = 0; i < activeTouchElements.size(); i++) pointerIds.add(activeTouchElements.keyAt(i));
+      touchpadView.setPointerIdsToIgnore(pointerIds);
+    }
   }
 
   public void invalidateControlElement(ControlElement element) {
@@ -831,6 +888,11 @@ public class InputControlsView extends View {
    * instead of four competing per-direction writes.
    */
   public void handleStickInput(Binding firstBinding, float deltaX, float deltaY) {
+    handleStickInput(firstBinding, deltaX, deltaY, !batchingUpdates);
+  }
+
+  public void handleStickInput(
+      Binding firstBinding, float deltaX, float deltaY, boolean sendUpdate) {
     if (profile == null || !firstBinding.isGamepad()) return;
 
     GamepadState state = profile.getGamepadState();
@@ -850,7 +912,7 @@ public class InputControlsView extends View {
       state.thumbRY = deltaY;
     }
 
-    if (winHandler != null) {
+    if (winHandler != null && sendUpdate) {
       winHandler.sendGamepadState();
     }
   }
@@ -861,7 +923,7 @@ public class InputControlsView extends View {
 
   public void handleInputEvent(
       ExternalController controller, Binding binding, boolean isActionDown, float offset) {
-    handleInputEvent(controller, binding, isActionDown, offset, true);
+    handleInputEvent(controller, binding, isActionDown, offset, !batchingUpdates);
   }
 
   public void handleInputEvent(
