@@ -19,6 +19,7 @@
     <string name="common_ui_select_valid_exe_file">Please select a valid .exe file</string>
     <string name="common_ui_select_valid_icon_file">Please select a valid .ico or .png file.</string>
     <string name="common_ui_exit">Exit</string>
+    <string name="common_ui_exit_app">Exit App</string>
     <string name="common_ui_profile">Profile</string>
     <string name="common_ui_name">Name</string>
     <string name="common_ui_ok">OK</string>
@@ -439,6 +440,7 @@
     <string name="container_no_wine_installed">No Wine or Proton installed. Install one first.</string>
     <string name="container_wine_title">Wine</string>
     <string name="container_wine_opengl">OpenGL</string>
+    <string name="container_surface_effect">Surface Effect</string>
 
     <!-- Container > Box64 -->
     <string name="container_box64_title">Box64</string>
@@ -658,6 +660,15 @@ E.g. <b>META</b> for <i>META key</i>, \n
     <string name="session_drawer_hud_element_ram">RAM</string>
     <string name="session_drawer_hud_element_battery">BAT</string>
     <string name="session_drawer_hud_element_graph">Graph</string>
+    <string name="hud_position_menu_title">Move HUD to</string>
+    <string name="hud_position_top_left">Top Left</string>
+    <string name="hud_position_top_center">Top Center</string>
+    <string name="hud_position_top_right">Top Right</string>
+    <string name="hud_position_left_center">Left Center</string>
+    <string name="hud_position_right_center">Right Center</string>
+    <string name="hud_position_bottom_left">Bottom Left</string>
+    <string name="hud_position_bottom_center">Bottom Center</string>
+    <string name="hud_position_bottom_right">Bottom Right</string>
     <string name="session_drawer_hud_alpha_input_title">Set Alpha</string>
     <string name="session_drawer_hud_scale_input_title">Set Scale</string>
     <string name="session_drawer_hud_input_hint">Enter a value from %1$d to %2$d. Values above the limit are clamped.</string>
@@ -1066,6 +1077,11 @@ Installed path:
     <string name="google_cloud_working">Working\u2026</string>
     <string name="google_cloud_sign_in">Sign In</string>
     <string name="google_cloud_disable_sync">Disable Sync</string>
+    <string name="google_cloud_connect_drive">Connect Drive</string>
+    <string name="google_cloud_connect_drive_first">Connect Google Drive first.</string>
+    <string name="google_cloud_drive_connected_short">Drive Connected</string>
+    <string name="google_cloud_drive_connected">Google Drive is connected.</string>
+    <string name="google_cloud_drive_authorization_started">Google Drive authorization started.</string>
     <string name="google_cloud_store_logins">Store Logins</string>
     <string name="google_cloud_store_login_sync_busy">Working on your store login sync\u2026</string>
     <string name="google_cloud_saved_games_unavailable">Google Saved Games unavailable</string>

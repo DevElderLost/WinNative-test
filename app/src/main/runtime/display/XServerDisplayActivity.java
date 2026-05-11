@@ -1,7 +1,5 @@
 package com.winlator.cmod.runtime.display;
 
-import static com.winlator.cmod.shared.android.AppUtils.showToast;
-
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -20,6 +18,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.hardware.input.InputManager;
 import android.net.Uri;
 import android.opengl.GLSurfaceView;
 import android.text.format.DateFormat;
@@ -76,9 +75,11 @@ import com.winlator.cmod.runtime.container.Shortcut;
 import com.winlator.cmod.feature.settings.DXVKConfigUtils;
 import com.winlator.cmod.feature.settings.GraphicsDriverConfigUtils;
 import com.winlator.cmod.feature.shortcuts.ShortcutsFragment;
-import com.winlator.cmod.feature.sync.CloudSyncConflictDialog;
-import com.winlator.cmod.feature.sync.CloudSyncConflictTimestamps;
 import com.winlator.cmod.feature.sync.CloudSyncHelper;
+import com.winlator.cmod.feature.sync.EpicLaunchCloudSync;
+import com.winlator.cmod.feature.sync.GogLaunchCloudSync;
+import com.winlator.cmod.feature.steamcloudsync.SteamExitCloudSync;
+import com.winlator.cmod.feature.steamcloudsync.SteamLaunchCloudSync;
 import com.winlator.cmod.feature.stores.steam.ui.SteamClientDownloadFailureDialog;
 import com.winlator.cmod.feature.settings.WineD3DConfigUtils;
 import com.winlator.cmod.runtime.compat.SteamBridge;
@@ -87,6 +88,7 @@ import com.winlator.cmod.runtime.content.ContentsManager;
 import com.winlator.cmod.runtime.content.AdrenotoolsManager;
 import com.winlator.cmod.shared.android.AppUtils;
 import com.winlator.cmod.shared.android.AppTerminationHelper;
+import com.winlator.cmod.shared.ui.toast.WinToast;
 import com.winlator.cmod.runtime.wine.EnvVars;
 import com.winlator.cmod.shared.io.FileUtils;
 import com.winlator.cmod.runtime.system.CPUStatus;
@@ -274,6 +276,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     private boolean firstTimeBoot = false;
     private SharedPreferences preferences;
     private boolean isMouseDisabled = false;
+    private boolean isPointerCaptureForcedOff = false;
+    private boolean isVolumeUpPressed = false;
+    private boolean isVolumeDownPressed = false;
     private OnExtractFileListener onExtractFileListener;
     private WinHandler winHandler;
     private WineRequestHandler wineRequestHandler;
@@ -285,10 +290,32 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     private int taskAffinityMask = 0;
     private int taskAffinityMaskWoW64 = 0;
     private int frameRatingWindowId = -1;
-    private boolean cursorLock; // Flag to track if pointer capture was requested
+    private android.net.wifi.WifiManager.MulticastLock multicastLock;
     private final float[] xform = XForm.getInstance();
     private ContentsManager contentsManager;
     private boolean navigationFocused = false;
+
+    private boolean hasExternalMouse() {
+        InputManager inputManager = (InputManager) getSystemService(Context.INPUT_SERVICE);
+        for (int deviceId : inputManager.getInputDeviceIds()) {
+            InputDevice device = inputManager.getInputDevice(deviceId);
+            if (device != null && !device.isVirtual() && (device.getSources() & InputDevice.SOURCE_MOUSE) != 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void tryCapturePointer() {
+        if (touchpadView != null && hasExternalMouse() && (drawerStateHolder == null || !drawerStateHolder.isDrawerOpen())) {
+            touchpadView.postDelayed(() -> {
+                if (touchpadView != null) {
+                    updatePointerCapture();
+                }
+            }, 100);
+        }
+    }
+
     private MidiHandler midiHandler;
     private String midiSoundFont = "";
     private String lc_all = "";
@@ -586,7 +613,18 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
 
         preloaderDialog = new PreloaderDialog(this);
 
-        cursorLock = preferences.getBoolean("cursor_lock", false);
+        try {
+            android.net.wifi.WifiManager wifiManager = (android.net.wifi.WifiManager)
+                    getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wifiManager != null) {
+                multicastLock = wifiManager.createMulticastLock("winnative-xserver");
+                multicastLock.setReferenceCounted(false);
+                multicastLock.acquire();
+            }
+        } catch (Exception e) {
+            Log.w("XServerDisplayActivity", "Failed to acquire MulticastLock", e);
+        }
+
         dualSeriesBattery = preferences.getBoolean(FrameRating.PREF_HUD_DUAL_SERIES_BATTERY, false);
 
         // Check for Dark Mode
@@ -775,7 +813,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                         || (shortcutPath != null && !shortcutPath.isEmpty());
                 if (launchedFromShortcutIdentity) {
                     disableUnavailablePinnedShortcut(containerId, shortcutUuid, shortcutPath, shortcutPathHash);
-                    showToast(this, R.string.shortcuts_list_not_available);
+                    WinToast.show(this, R.string.shortcuts_list_not_available);
                     finish();
                     return;
                 }
@@ -1250,63 +1288,21 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 // Cancel any pending post-game update check since we're launching a new game
                 UpdateChecker.INSTANCE.cancelPostGameCheck();
 
-                if (shortcut != null) {
-                    if (isCloudSyncEnabledForShortcut() && !CloudSyncHelper.isOfflineMode(shortcut)) {
-                        CloudSyncHelper.forceDownloadOnContainerSwap(this, shortcut);
-
-                        // Cloud save sync on every store-game launch
-                        if (CloudSyncHelper.isStoreGame(shortcut)) {
-                            if (!CloudSyncHelper.hasLocalCloudSaves(this, shortcut)) {
-                                // First launch — download silently
-                                showLaunchPreloader(getString(R.string.preloader_downloading_cloud));
-                                CloudSyncHelper.downloadCloudSaves(this, shortcut);
-                                showLaunchPreloader(getString(R.string.preloader_initializing));
-                            } else if (CloudSyncHelper.cloudSavesDiffer(this, shortcut)) {
-                                // Cloud differs from local — ask the user what to do
-                                final CountDownLatch dialogLatch = new CountDownLatch(1);
-                                final boolean[] useCloud = {false};
-                                final boolean[] keepBackup = {false};
-                                final CloudSyncConflictTimestamps timestamps = CloudSyncHelper.getConflictTimestamps(this, shortcut);
-                                runOnUiThread(() -> {
-                                    CloudSyncConflictDialog.show(
-                                        XServerDisplayActivity.this,
-                                        timestamps,
-                                        (boolean keep) -> {
-                                            useCloud[0] = true;
-                                            keepBackup[0] = keep;
-                                            dialogLatch.countDown();
-                                        },
-                                        (boolean keep) -> {
-                                            useCloud[0] = false;
-                                            keepBackup[0] = keep;
-                                            dialogLatch.countDown();
-                                        }
-                                    );
-                                });
-                                try {
-                                    dialogLatch.await();
-                                } catch (InterruptedException ignored) {}
-
-                                if (useCloud[0]) {
-                                    // Archive the local save that's about to be overwritten
-                                    if (keepBackup[0]) {
-                                        try {
-                                            backupDiscardedSaveForShortcut(shortcut,
-                                                com.winlator.cmod.feature.sync.google.GameSaveBackupManager.BackupOrigin.LOCAL);
-                                        } catch (Throwable t) {
-                                            android.util.Log.w("CloudSync", "Pre-overwrite local backup failed", t);
-                                        }
-                                    }
-                                    showLaunchPreloader(getString(R.string.preloader_syncing_cloud));
-                                    CloudSyncHelper.downloadCloudSaves(this, shortcut);
-                                    showLaunchPreloader(getString(R.string.preloader_initializing));
-                                }
-                                // Keep Local: cloud version is about to be overwritten on next exit.
-                                // Capturing it would require a separate provider download — deferred for now.
-                            }
-                        }
-                    }
-                }
+                SteamLaunchCloudSync.syncBeforeLaunch(
+                        this,
+                        shortcut,
+                        isCloudSyncEnabledForShortcut(),
+                        this::showLaunchPreloader);
+                EpicLaunchCloudSync.syncBeforeLaunch(
+                        this,
+                        shortcut,
+                        isCloudSyncEnabledForShortcut(),
+                        this::showLaunchPreloader);
+                GogLaunchCloudSync.syncBeforeLaunch(
+                        this,
+                        shortcut,
+                        isCloudSyncEnabledForShortcut(),
+                        this::showLaunchPreloader);
                 setupWineSystemFiles();
                 extractGraphicsDriverFiles();
                 changeWineAudioDriver();
@@ -1787,6 +1783,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     @Override
     public void onPause() {
         super.onPause();
+        isVolumeUpPressed = false;
+        isVolumeDownPressed = false;
         boolean gyroEnabled = preferences.getBoolean("gyro_enabled", false);
 
         if (gyroEnabled) {
@@ -2196,7 +2194,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 XServerDrawerStateHolder holder = drawerStateHolder;
                 List<String> lines = holder != null ? holder.snapshotLogLines() : new ArrayList<>();
                 if (lines.isEmpty()) {
-                    showToast(this, getString(R.string.session_drawer_logs_share_empty));
+                    WinToast.show(this, getString(R.string.session_drawer_logs_share_empty));
                     return;
                 }
                 try (BufferedWriter out = new BufferedWriter(new FileWriter(shareFile))) {
@@ -2217,7 +2215,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             startActivity(Intent.createChooser(shareIntent, getString(R.string.session_drawer_logs_share_chooser)));
         } catch (Exception e) {
             Log.w("XServerLogs", "Failed to share log stream", e);
-            showToast(this, getString(R.string.session_drawer_logs_share_failed));
+            WinToast.show(this, getString(R.string.session_drawer_logs_share_failed));
         }
     }
 
@@ -2585,14 +2583,6 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         }, workerName).start();
     }
 
-    private boolean isRetryableSteamExitSyncMessage(@Nullable String message) {
-        if (message == null || message.isEmpty()) {
-            return true;
-        }
-        String normalized = message.toLowerCase(java.util.Locale.US);
-        return !normalized.contains("offline");
-    }
-
     private boolean isRetryableGoogleDriveBackupMessage(@Nullable String message) {
         if (message == null || message.isEmpty()) {
             return true;
@@ -2685,100 +2675,32 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
     }
 
     /**
-     * Synchronously zip the current local save and upload it to the game's Save History folder.
-     * Called when the user is about to overwrite local with a cloud version and opted in to
-     * keeping a backup of the replaced side.
-     */
-    private void backupDiscardedSaveForShortcut(
-        com.winlator.cmod.runtime.container.Shortcut shortcut,
-        com.winlator.cmod.feature.sync.google.GameSaveBackupManager.BackupOrigin origin
-    ) {
-        if (shortcut == null) return;
-        String gameSource = shortcut.getExtra("game_source");
-        String gameId;
-        com.winlator.cmod.feature.sync.google.GameSaveBackupManager.GameSource source;
-        if ("STEAM".equals(gameSource)) {
-            gameId = shortcut.getExtra("app_id");
-            source = com.winlator.cmod.feature.sync.google.GameSaveBackupManager.GameSource.STEAM;
-        } else if ("EPIC".equals(gameSource)) {
-            gameId = shortcut.getExtra("app_id");
-            source = com.winlator.cmod.feature.sync.google.GameSaveBackupManager.GameSource.EPIC;
-        } else if ("GOG".equals(gameSource)) {
-            gameId = shortcut.getExtra("gog_id");
-            source = com.winlator.cmod.feature.sync.google.GameSaveBackupManager.GameSource.GOG;
-        } else {
-            return;
-        }
-        if (gameId == null || gameId.isEmpty()) return;
-
-        String gameName = shortcut.name != null ? shortcut.name : "Unknown";
-        final String gameIdFinal = gameId;
-        final com.winlator.cmod.feature.sync.google.GameSaveBackupManager.GameSource sourceFinal = source;
-        final String gameNameFinal = gameName;
-
-        try {
-            com.winlator.cmod.feature.sync.google.GameSaveBackupManager.BackupResult result =
-                (com.winlator.cmod.feature.sync.google.GameSaveBackupManager.BackupResult) kotlinx.coroutines.BuildersKt.runBlocking(
-                    kotlinx.coroutines.Dispatchers.getIO(),
-                    (scope, continuation) ->
-                        com.winlator.cmod.feature.sync.google.GameSaveBackupManager.INSTANCE.backupDiscardedSave(
-                            this, sourceFinal, gameIdFinal, gameNameFinal, origin, continuation
-                        )
-                );
-            android.util.Log.i("CloudSync", "Discarded save backup: " + result.getMessage());
-        } catch (Exception e) {
-            android.util.Log.w("CloudSync", "Failed to back up discarded save", e);
-        }
-    }
-
-    /**
      * Syncs Steam cloud saves when exiting a Steam game.
      * Calls SteamService.closeApp() which runs SteamAutoCloud.syncUserFiles()
      * to upload modified save files to Steam Cloud.
      */
     private void syncSteamCloudOnExit(Runnable onComplete) {
-        boolean isSteamGame = "STEAM".equals(shortcut.getExtra("game_source"));
-        if (!isSteamGame) {
+        String appId = shortcut.getExtra("app_id");
+        if (appId == null || appId.isEmpty()) {
             onComplete.run();
             return;
         }
-        
-        try {
-            int appId = Integer.parseInt(shortcut.getExtra("app_id"));
-            Log.d("XServerDisplayActivity", "Syncing Steam cloud saves for appId=" + appId);
-            
-            preloaderDialog.showOnUiThread("Cloud Sync Uploading...");
 
-            runExitUploadWithRetries(
-                    "Steam cloud sync for appId=" + appId,
-                    "Cloud Sync Uploading...",
-                    callback ->
-                            com.winlator.cmod.feature.stores.steam.service.SteamService.syncCloudOnExit(
-                                    this,
-                                    appId,
-                                    new com.winlator.cmod.feature.stores.steam.service.SteamService.Companion.CloudSyncCallback() {
-                                        @Override
-                                        public void onProgress(String message, float progress) {
-                                            runOnUiThread(() -> {
-                                                int pct = (int) (progress * 100);
-                                                preloaderDialog.showOnUiThread(message + " (" + pct + "%)");
-                                            });
-                                        }
-
-                                        @Override
-                                        public void onComplete(boolean success, String message) {
-                                            callback.onComplete(
-                                                    new ExitUploadResult(
-                                                            success,
-                                                            message,
-                                                            isRetryableSteamExitSyncMessage(message)));
-                                        }
-                                    }),
-                    onComplete);
-        } catch (Exception e) {
-            Log.w("XServerDisplayActivity", "Failed to initiate Steam cloud sync", e);
-            onComplete.run();
-        }
+        runExitUploadWithRetries(
+                "Steam cloud sync for appId=" + appId,
+                "Cloud Sync Uploading...",
+                callback ->
+                        SteamExitCloudSync.syncOnExit(
+                                this,
+                                shortcut,
+                                text -> preloaderDialog.showOnUiThread(text),
+                                result ->
+                                        callback.onComplete(
+                                                new ExitUploadResult(
+                                                        result.getSuccess(),
+                                                        result.getMessage(),
+                                                        result.getRetryable()))),
+                onComplete);
     }
 
     private void syncEpicCloudOnExit(Runnable onComplete) {
@@ -2788,8 +2710,30 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             return;
         }
 
+        final int appId;
         try {
-            int appId = Integer.parseInt(appIdStr);
+            appId = Integer.parseInt(appIdStr);
+        } catch (NumberFormatException e) {
+            Log.w("XServerDisplayActivity", "Failed to parse Epic app_id for cloud sync", e);
+            onComplete.run();
+            return;
+        }
+
+        // Skip silently when an upload can't possibly succeed — the game doesn't opt
+        // into Epic cloud saves (most don't), the user isn't signed in, or there are
+        // no local save files yet. Otherwise the retry-with-backoff loop below would
+        // run three full rounds showing "Cloud Sync Uploading… Retry 3/3" for a
+        // permanent no-op.
+        if (!com.winlator.cmod.feature.stores.epic.service.EpicCloudSavesManager
+                .canAttemptExitUpload(this, appId)) {
+            Log.i("XServerDisplayActivity",
+                    "Epic cloud sync skipped for appId=" + appId
+                            + " (game does not support cloud saves, user signed out, or no local save files)");
+            onComplete.run();
+            return;
+        }
+
+        try {
             Log.d("XServerDisplayActivity", "Syncing Epic cloud saves for appId=" + appId);
             preloaderDialog.showOnUiThread("Cloud Sync Uploading...");
 
@@ -2819,7 +2763,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                             callback),
                     onComplete);
         } catch (Exception e) {
-            Log.w("XServerDisplayActivity", "Failed to parse Epic app_id for cloud sync", e);
+            Log.w("XServerDisplayActivity", "Failed to start Epic cloud sync", e);
             onComplete.run();
         }
     }
@@ -2883,6 +2827,11 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         if (preloaderDialog != null) {
             preloaderDialog.close();
         }
+        if (multicastLock != null && multicastLock.isHeld()) {
+            try {
+                multicastLock.release();
+            } catch (Exception ignored) {}
+        }
         super.onDestroy();
         // Schedule a deferred update check 10 s after game exit
         if (!switchLaunchInProgress.get()) {
@@ -2917,6 +2866,19 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             Log.e(tag, "MidiHandler socket still open");
         }
         cleanupDebugDialog("onDestroy");
+
+        // Epic ownership tokens are short-lived (~30 minutes server-side) and personally scoped
+        // to the running session. Clear them on game exit so we don't leave them sitting in the
+        // Wine prefix between launches; the next launch fetches a fresh token via the cache
+        // (still valid for ~25 minutes).
+        if (shortcut != null && "EPIC".equals(shortcut.getExtra("game_source"))) {
+            try {
+                com.winlator.cmod.feature.stores.epic.service.EpicService.Companion
+                        .cleanupLaunchTokens(getApplicationContext(), container);
+            } catch (Exception e) {
+                Log.w("EPIC", "Failed to cleanup ownership tokens on game exit", e);
+            }
+        }
     }
 
     private boolean isCustomShortcut() {
@@ -2971,12 +2933,17 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         if (drawerStateHolder != null) {
             drawerStateHolder.openDrawer();
         }
+        if (touchpadView != null) {
+            touchpadView.releasePointerCapture();
+            touchpadView.setOnCapturedPointerListener(null);
+        }
     }
 
     private void closeDrawerMenu() {
         if (drawerStateHolder != null) {
             drawerStateHolder.closeDrawer();
         }
+        tryCapturePointer();
     }
 
     private String currentGyroActivatorLabel() {
@@ -3245,7 +3212,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     @Override
                     public void onInputControlsShowOverlayChanged(boolean enabled) {
                         if (inputControlsView != null) inputControlsView.setShowTouchscreenControls(enabled);
-                        preferences.edit().putBoolean("show_touchscreen_controls_enabled", enabled).apply();
+                        preferences.edit().putBoolean("show_touchscreen_controls_enabled", enabled).commit();
                         renderDrawerMenu();
                     }
 
@@ -3253,25 +3220,26 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     public void onInputControlsTapToClickChanged(boolean enabled) {
                         isTapToClickEnabled = enabled;
                         if (touchpadView != null) touchpadView.setTapToClickEnabled(enabled);
+                        preferences.edit().putBoolean("tap_to_click_enabled", enabled).commit();
                         renderDrawerMenu();
                     }
 
                     @Override
                     public void onInputControlsOverlayOpacityChanged(float opacity) {
                         if (inputControlsView != null) inputControlsView.setOverlayOpacity(opacity);
-                        preferences.edit().putFloat("overlay_opacity", opacity).apply();
+                        preferences.edit().putFloat("overlay_opacity", opacity).commit();
                         renderDrawerMenu();
                     }
 
                     @Override
                     public void onInputControlsTouchscreenHapticsChanged(boolean enabled) {
-                        preferences.edit().putBoolean("touchscreen_haptics_enabled", enabled).apply();
+                        preferences.edit().putBoolean("touchscreen_haptics_enabled", enabled).commit();
                         renderDrawerMenu();
                     }
 
                     @Override
                     public void onInputControlsGamepadVibrationChanged(boolean enabled) {
-                        preferences.edit().putBoolean(ControllerManager.PREF_VIBRATION_GLOBAL, enabled).apply();
+                        preferences.edit().putBoolean(ControllerManager.PREF_VIBRATION_GLOBAL, enabled).commit();
                         if (winHandler != null) winHandler.setGlobalVibrationEnabled(enabled);
                         renderDrawerMenu();
                     }
@@ -3734,7 +3702,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 preferences.edit().putBoolean("use_dri3", isNativeRenderingEnabled).apply();
                 if (frameRating != null) frameRating.setIsNative(isNativeRenderingEnabled);
                 renderDrawerMenu();
-                showToast(this, getString(isNativeRenderingEnabled
+                WinToast.show(this, getString(isNativeRenderingEnabled
                     ? R.string.session_xserver_native_rendering_enabled_toast
                     : R.string.session_xserver_native_rendering_disabled_toast));
                 break;
@@ -3780,8 +3748,16 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         }
     }
 
+    @Override
+    public void onPointerCaptureChanged(boolean hasCapture) {
+        super.onPointerCaptureChanged(hasCapture);
+        if (xServer != null) {
+            xServer.setPointerCaptureActive(hasCapture);
+        }
+    }
+
     private boolean shouldUsePointerCapture() {
-        return cursorLock;
+        return !isPointerCaptureForcedOff && hasExternalMouse() && (drawerStateHolder == null || !drawerStateHolder.isDrawerOpen());
     }
 
     private void updatePointerCapture() {
@@ -3795,6 +3771,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                 }
             });
             if (!touchpadView.hasPointerCapture()) {
+                touchpadView.requestFocus();
                 touchpadView.requestPointerCapture();
             }
         } else {
@@ -3807,6 +3784,8 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         if (touchpadView != null) {
             if (hadPointerCapture) {
                 touchpadView.resetInputState();
+                touchpadView.releasePointerCapture();
+                touchpadView.setOnCapturedPointerListener(null);
             }
             touchpadView.releasePointerCapture();
             touchpadView.setOnCapturedPointerListener(null);
@@ -4559,6 +4538,10 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         final GLRenderer renderer = xServerView.getRenderer();
         renderer.setCursorVisible(false);
         renderer.setNativeMode(isNativeRenderingEnabled);
+        
+        boolean swapRB = shortcut != null ? shortcut.getExtra("swapRB", "0").equals("1") 
+                         : (container != null && container.getExtra("swapRB", "0").equals("1"));
+        renderer.swapRB = swapRB;
 
         if (shortcut != null) {
             renderer.setUnviewableWMClasses("explorer.exe");
@@ -5200,6 +5183,9 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         boolean handledByTouchpadView = false;
 
         if (isPointerMotionEvent(event) && touchpadView != null) {
+            if (shouldUsePointerCapture() && !touchpadView.hasPointerCapture()) {
+                updatePointerCapture();
+            }
             handledByTouchpadView = touchpadView.onExternalMouseEvent(event);
         }
 
@@ -5249,6 +5235,23 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         }
 
         if (handled) return true;
+
+        int keyCode = event.getKeyCode();
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) isVolumeUpPressed = true;
+                else isVolumeDownPressed = true;
+
+                if (isVolumeUpPressed && isVolumeDownPressed) {
+                    isPointerCaptureForcedOff = !isPointerCaptureForcedOff;
+                    updatePointerCapture();
+                    return true;
+                }
+            } else if (event.getAction() == KeyEvent.ACTION_UP) {
+                if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) isVolumeUpPressed = false;
+                else isVolumeDownPressed = false;
+            }
+        }
 
         if (event.getAction() == KeyEvent.ACTION_DOWN &&
                 (event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_MODE ||
@@ -6748,26 +6751,35 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
         // Either NTSync was explicitly requested, or no sync vars are set at all.
         // In both cases: try NTSync first, fall back to ESync if unavailable.
         if (canAccessNtsyncDevice()) {
-            // NTSync available — enable it, disable ESync (mutually exclusive).
-            envVars.put("WINENTSYNC", "1");
-            envVars.put("PROTON_USE_NTSYNC", "1");
-            envVars.remove("WINEESYNC");
-            envVars.put("PROTON_NO_ESYNC", "1");
-            Log.d("XServerDisplayActivity",
-                    "Sync: NTSync enabled (/dev/ntsync accessible) — disabled ESync");
-        } else {
-            // NTSync not available — fall back to ESync automatically.
-            envVars.remove("WINENTSYNC");
-            envVars.remove("PROTON_USE_NTSYNC");
-            envVars.put("WINEESYNC", "1");
-            envVars.remove("PROTON_NO_ESYNC");
-            if (ntSyncExplicit) {
-                Log.w("XServerDisplayActivity",
-                        "Sync: NTSync requested but /dev/ntsync not accessible — falling back to ESync");
-            } else {
+            // Check if user explicitly DISABLED NTSync in UI
+            String ntVal = envVars.get("WINENTSYNC");
+            boolean ntDisabled = "0".equals(ntVal) || "false".equalsIgnoreCase(ntVal);
+
+            if (!ntDisabled) {
+                // NTSync available and not disabled — enable it, disable ESync (mutually exclusive).
+                envVars.put("WINENTSYNC", "1");
+                envVars.put("PROTON_USE_NTSYNC", "1");
+                envVars.remove("WINEESYNC");
+                envVars.remove("WINEESYNC_WINLATOR");
+                envVars.remove("PROTON_USE_ESYNC");
+                envVars.put("PROTON_NO_ESYNC", "1");
                 Log.d("XServerDisplayActivity",
-                        "Sync: NTSync not available (no /dev/ntsync) — using ESync");
+                        "Sync: NTSync enabled (/dev/ntsync accessible) — disabled ESync");
+                return;
             }
+        }
+
+        // Default fallback: use ESync (either NTSync unavailable, or explicitly disabled by user)
+        envVars.remove("WINENTSYNC");
+        envVars.remove("PROTON_USE_NTSYNC");
+        envVars.put("WINEESYNC", "1");
+        envVars.remove("PROTON_NO_ESYNC");
+        if (ntSyncExplicit) {
+            Log.w("XServerDisplayActivity",
+                    "Sync: NTSync requested but /dev/ntsync not accessible or disabled — falling back to ESync");
+        } else {
+            Log.d("XServerDisplayActivity",
+                    "Sync: NTSync not available or disabled — using ESync");
         }
     }
 
@@ -7744,7 +7756,10 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
                     ? parseBoolean(getShortcutSetting("launchRealSteam", container.isLaunchRealSteam() ? "1" : "0"))
                     : container.isLaunchRealSteam();
 
-            if (launchRealSteamMode) {
+            boolean steamCloudSyncAllowed =
+                    isCloudSyncEnabledForShortcut()
+                            && !com.winlator.cmod.feature.sync.CloudSyncHelper.isOfflineMode(shortcut);
+            if (launchRealSteamMode && steamCloudSyncAllowed) {
                 // Seed or heal the shared Steam client store before launch.
                 // isSteamInstalled() only verifies file existence; isSharedSteamStorePristine()
                 // adds a size check that catches a Goldberg-stub overwrite (the #1 cause of
@@ -7896,7 +7911,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             // Local metadata cleanup — after javasteam has synced, Steam may still have
             // stale local state from previous sessions. Wipe both the metadata cache and
             // the remote/ save directory so Steam re-reads cleanly from the sync results.
-            if (launchRealSteamMode && steamAccountId > 0) {
+            if (launchRealSteamMode && steamCloudSyncAllowed && steamAccountId > 0) {
                 File userAppDir = new File(steamDir,
                         "userdata/" + steamAccountId + "/" + appId);
                 File remoteCache = new File(userAppDir, "remotecache.vdf");
@@ -8005,7 +8020,7 @@ public class XServerDisplayActivity extends FixedFontScaleAppCompatActivity {
             } catch (Exception e) {
                 Log.w("XServerDisplayActivity", "Real Steam watchdog: wineserver -k failed", e);
             }
-            runOnUiThread(() -> AppUtils.showToast(
+            runOnUiThread(() -> WinToast.show(
                     XServerDisplayActivity.this,
                     "Steam client failed to start. Try toggling Launch Steam Client off.",
                     android.widget.Toast.LENGTH_LONG));
