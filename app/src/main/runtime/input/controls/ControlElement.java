@@ -371,6 +371,7 @@ halfWidth *= scale;
 halfHeight *= scale;
 boundingBox.set(x - halfWidth, y - halfHeight, x + halfWidth, y + halfHeight);
 boundingBoxNeedsUpdate = false;
+paths = null; // invalidate cached paths (D_PAD, RADIAL_MENU) when bounding box changes
 return boundingBox;
 }
 
@@ -624,37 +625,61 @@ return boundingBox;
           float offsetX = snappingSize * 2 * scale;
           float offsetY = snappingSize * 3 * scale;
           float start = snappingSize * scale;
-          path.reset();
 
-          path.moveTo(cx, cy - start);
-          path.lineTo(cx - offsetX, cy - offsetY);
-          path.lineTo(cx - offsetX, boundingBox.top);
-          path.lineTo(cx + offsetX, boundingBox.top);
-          path.lineTo(cx + offsetX, cy - offsetY);
-          path.close();
+          // Build per-direction paths if needed (index: 0=UP, 1=RIGHT, 2=DOWN, 3=LEFT)
+          if (paths == null || paths.length != 4) {
+            paths = new Path[4];
+            for (int i = 0; i < 4; i++) paths[i] = new Path();
+          }
 
-          path.moveTo(cx - start, cy);
-          path.lineTo(cx - offsetY, cy - offsetX);
-          path.lineTo(boundingBox.left, cy - offsetX);
-          path.lineTo(boundingBox.left, cy + offsetX);
-          path.lineTo(cx - offsetY, cy + offsetX);
-          path.close();
+          // UP (index 0)
+          paths[0].reset();
+          paths[0].moveTo(cx, cy - start);
+          paths[0].lineTo(cx - offsetX, cy - offsetY);
+          paths[0].lineTo(cx - offsetX, boundingBox.top);
+          paths[0].lineTo(cx + offsetX, boundingBox.top);
+          paths[0].lineTo(cx + offsetX, cy - offsetY);
+          paths[0].close();
 
-          path.moveTo(cx, cy + start);
-          path.lineTo(cx - offsetX, cy + offsetY);
-          path.lineTo(cx - offsetX, boundingBox.bottom);
-          path.lineTo(cx + offsetX, boundingBox.bottom);
-          path.lineTo(cx + offsetX, cy + offsetY);
-          path.close();
+          // RIGHT (index 1)
+          paths[1].reset();
+          paths[1].moveTo(cx + start, cy);
+          paths[1].lineTo(cx + offsetY, cy - offsetX);
+          paths[1].lineTo(boundingBox.right, cy - offsetX);
+          paths[1].lineTo(boundingBox.right, cy + offsetX);
+          paths[1].lineTo(cx + offsetY, cy + offsetX);
+          paths[1].close();
 
-          path.moveTo(cx + start, cy);
-          path.lineTo(cx + offsetY, cy - offsetX);
-          path.lineTo(boundingBox.right, cy - offsetX);
-          path.lineTo(boundingBox.right, cy + offsetX);
-          path.lineTo(cx + offsetY, cy + offsetX);
-          path.close();
+          // DOWN (index 2)
+          paths[2].reset();
+          paths[2].moveTo(cx, cy + start);
+          paths[2].lineTo(cx - offsetX, cy + offsetY);
+          paths[2].lineTo(cx - offsetX, boundingBox.bottom);
+          paths[2].lineTo(cx + offsetX, boundingBox.bottom);
+          paths[2].lineTo(cx + offsetX, cy + offsetY);
+          paths[2].close();
 
-          canvas.drawPath(path, paint);
+          // LEFT (index 3)
+          paths[3].reset();
+          paths[3].moveTo(cx - start, cy);
+          paths[3].lineTo(cx - offsetY, cy - offsetX);
+          paths[3].lineTo(boundingBox.left, cy - offsetX);
+          paths[3].lineTo(boundingBox.left, cy + offsetX);
+          paths[3].lineTo(cx - offsetY, cy + offsetX);
+          paths[3].close();
+
+          // Draw each direction: fill if pressed, then stroke outline
+          for (int i = 0; i < 4; i++) {
+            if (states[i]) {
+              paint.setStyle(Paint.Style.FILL);
+              paint.setColor(fillColor);
+              canvas.drawPath(paths[i], paint);
+            }
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setColor(primaryColor);
+            paint.setStrokeWidth(strokeWidth);
+            canvas.drawPath(paths[i], paint);
+          }
           break;
         }
       case RANGE_BUTTON:
@@ -1159,6 +1184,7 @@ return boundingBox;
           inputControlsView.handleInputEvent(binding, state, value);
           this.states[i] = state;
         }
+        inputControlsView.invalidate();
       }
 
       return true;
